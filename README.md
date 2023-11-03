@@ -31,8 +31,8 @@ You just need to use some jump-wires to connect FDD to Arduino directry.
 ------------------------
 ## Other information
 - The primary goal of this project is to provide **minimum** features and capabilities to capture the FD data and create a FD image file.
-    - The host program doesn't take any comman options. You may need to modify the source code to change the settings.
-    - The Arduino firmware is not configurable on-the-fly. You need to modify the source code, build-and-reprogram to change its behavior and settings.
+    - The host program doesn't take any command options. You may need to modify the source code to change the settings.
+    - The Arduino firmware is not configurable at the runtime. You need to modify the source code, build-and-reprogram to change its behavior and settings.
 - This project uses 'MFM' floppy image format that is defined and developed by me. Please refer to the following projects for the details.
     - [Floppy disk shield 2D](https://github.com/yas-sim/floppy_disk_shield_2d)
     - [FDC bitstream](https://github.com/yas-sim/fdc_bitstream)
