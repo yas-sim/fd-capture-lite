@@ -1,5 +1,7 @@
 # fd-capture-lite
 
+## ! This project is still WIP and in early stage !
+
 This project is a simplified version of [floppy_disk_shield_2d](https://github.com/yas-sim/floppy_disk_shield_2d).
 The FD-capture-lite has the following features:
 - 2D/2DD floppy image capturing feature

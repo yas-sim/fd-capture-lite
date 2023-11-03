@@ -180,27 +180,27 @@ void read_track(void) {
     "rjmp L_IDX0_%="                  "\n\t"
     "L_IDX1_%=:"                      "\n\t"
     "sbic %[io_pind],%[bit_index]"    "\n\t"
-    "rjmp L_IDX1_%="                  "\n\t"    // Index hole detected
+    "rjmp L_IDX1_%="                  "\n\t"  // Index hole detected
 
     // Clear TCNT1
     "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
     "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
 
-    "sbi %[io_tifr1],%[bit_ICF1]"     "\n\t"    // Clear ICF1
+    "sbi %[io_tifr1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
     "L_MAIN_LOOP_%=:"                 "\n\t"
 
     // Wait for input capture flag 1 on timer 1
     "L_WAIT_FOR_ICF1_%=:"             "\n\t"
-    "sbis %[io_tifr1],%[bit_ICF1]"    "\n\t"    // TIFR1.ICF1
+    "sbis %[io_tifr1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
     "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
 
     // Clear TCNT1
     "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
     "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
 
-    "sbi %[io_tifr1],%[bit_ICF1]"     "\n\t"    // Clear ICF1
-    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"    // Read ICR1L
+    "sbi %[io_tifr1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"  // Read ICR1L
 
     // Quantize captured value (val+v_cell_ofst)/div
     "add %[v_ic_val],%[v_cell_ofst]"  "\n\t"
