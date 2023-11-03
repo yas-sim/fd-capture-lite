@@ -16,17 +16,18 @@ The FD-capture-lite has the following features:
 You just need to use some jump-wires to connect FDD to Arduino directry.
 
 ----
-|Signal|Arduino shield pins|FDD 34pin conn|
-|---|---|---|
-|STEP|D2|20|
-|HEAD LOAD|D3|4|
-|MOTOR ON|D4|16|
-|SIDE1|D5|32|
-|INDEX|D6|8|
-|TRK00|D7|26|
-|RD|D8|30|
-|DIR|D9|18|
-|GND|GND|1,5,7,9,11,... One of a odd pins except pin3|
+|Signal|[Arduino shield pins](https://docs.arduino.cc/static/6ec5e4c2a6c0e9e46389d4f6dc924073/2f891/Pinout-UNOrev3_latest.png)|FDD 34pin conn|Note|
+|---|---|---|---|
+|STEP|D2|20||
+|HEAD LOAD|D3|4|You can connect this signal to GND. The Arduino firmware drives this signal to LOW all the time.|
+|MOTOR ON|D4|16|You can connect this signal to GND. The Arduino firmware drives this signal to LOW all the time.|
+|SIDE1|D5|32||
+|INDEX|D6|8||
+|TRK00|D7|26||
+|RD|D8|30||
+|DIR|D9|18||
+|DS0<br>DS1<br>DS2<br>DS3|GND|10<br>12<br>14<br>6|Depends on the setting of your FDD drive. You can connect all of them to GND if you have no idea which one to connect.|
+|GND|GND|1,5,7,9,11,...|One of a odd pins except pin3|
 
 ------------------------
 ## Other information
