@@ -1,11 +1,11 @@
 # fd-capture-lite
 
 This project is a simplified version of [floppy_disk_shield_2d](https://github.com/yas-sim/floppy_disk_shield_2d).
-The FD-capture-lite has following features:
+The FD-capture-lite has the following features:
 - 2D/2DD floppy image capturing feature
 - Create a floppy disk image in ['MFM' image](https://github.com/yas-sim/fdc_bitstream#mfm-image-data-format) file
 - Only you need is an [Arduino Uno R3](https://docs.arduino.cc/hardware/uno-rev3) and a floppy disk drive. You don't need to have a special Arduino shield or any other hardware.
-- Host program is written in Python. The host program communiates with Arduino via standard USB-serial interface on Arduino.
+- The host program is written in Python. The host program communicates with Arduino via the onboard USB-serial interface on Arduino.
 
 ## Caveat
 - ONLY *genuine Arduino Uno R3* may work.
