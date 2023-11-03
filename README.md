@@ -26,7 +26,7 @@ You just need to use some jump-wires to connect FDD to Arduino directry.
 |TRK00|D7|26||
 |RD|D8|30||
 |DIR|D9|18||
-|DS0<br>DS1<br>DS2<br>DS3|GND|10<br>12<br>14<br>6|Depends on the setting of your FDD drive. You can connect all of them to GND if you have no idea which one to connect.|
+|DS0<br>DS1<br>DS2<br>DS3|GND|10<br>12<br>14<br>6|Depends on the setting of your FDD drive. You can connect all of them to GND if you have no idea which one to connect.<br>The generic FDDs for IBM PCs use DS2 for drive select, and old 8-bit PCs may use DS0 or DS1 depending on which side the drive was installed.|
 |GND|GND|1,5,7,9,11,...|One of a odd pins except pin3|
 
 ------------------------
