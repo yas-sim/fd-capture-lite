@@ -18,14 +18,14 @@ You just need to use some jump-wires to connect FDD to Arduino directry.
 ----
 |Signal|Arduino shield pins|FDD 34pin conn|
 |---|---|---|
-|STEP|2|20|
-|HEAD LOAD|3|4|
-|MOTOR ON|4|16|
-|SIDE1|5|32|
-|INDEX|6|8|
-|TRK00|7|26|
-|RD|8|30|
-|DIR|9|18|
+|STEP|D2|20|
+|HEAD LOAD|D3|4|
+|MOTOR ON|D4|16|
+|SIDE1|D5|32|
+|INDEX|D6|8|
+|TRK00|D7|26|
+|RD|D8|30|
+|DIR|D9|18|
 |GND|GND|1,5,7,9,11,... One of a odd pins except pin3|
 
 ------------------------
