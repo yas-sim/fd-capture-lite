@@ -5,7 +5,7 @@ import serial
 from serial.tools import list_ports
 
 # 2D / 2DD / 2HD
-MEDIA_TYPE = "2D"
+MEDIA_TYPE = "2HD"
 
 class bitarray:
     def __init__(self):

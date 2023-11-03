@@ -5,17 +5,22 @@
 #define FLP_DR_500K   (0)
 #define FLP_DR_1M     (1)
 
+//---------------------------------------------------
+
 
 // To determine data rate (bit rate)
+// Options: FLP_2D, FLP_2DD, FLP_2HD
 #define MEDIA_TYPE FLP_2D
 
-// "2D", "2DD", "2HD"
 // To determine which single or double step-pulse to use.
+// Options: FLP_2D, FLP_2DD, FLP_2HD
 #define FDD_TYPE FLP_2HD
 
-// 0=Normal, 1=Test
+// Options: 0=Normal, 1=Test
 #define TEST_MODE     (0)
 
+
+//---------------------------------------------------
 
 #if FDD_TYPE==FLP_2DD || FDD_TYPE==FLP_2HD
 #define FDD_TRACK_NUM (80)
@@ -159,11 +164,31 @@ void read_track(void) {
   byte quantized = 0;
   bool index_passed = false;
 
-  byte cell_ofst;
+  // Memo:
+  // 2D/2DD Plus period = 4us/6us/8us, 2HD=2us/3us/4us
+  //
+  // Arduino Timer 1 clock setting = 16MHz (1:1)
+  // 2D/2DD Cell size = 32
+  //   (2us=32count) 4us=64count, 6us=96count, 8us=128count
+  //         1             2            3           4
+  // 2HD Cell size = 16
+  //   (2us=16count) 4us=32count, 6us=48count, 8us=64count
+  //         1             2            3           4
+  // 
+  //
+  // Actual TCNT1 (input capture) measurement (2D)
+  // Peak1=54count, Peak2=84count, Peak3=118count
+  //    64-54=10        96-86=10     128-118=10
+  //
+  // Actual TCNT1 (input capture) measurement (2D)
+  // Peak1=22count, Peak2=40count, Peak3=56count
+  //    32-22=10        40-32=8     64-56=8
+  //
+  // ; TCNT1 count might be smaller than expected ideal counts in 8 to 10 counts. (Due to TCNT1 clear delay in SW)
 #if DATA_DATE == FLP_DR_500K
-  cell_ofst = -8;       // 2D
+  byte cell_ofst = 10+32/2;     // 2D
 #else
-  cell_ofst = 0;        // 2HD
+  byte cell_ofst = 10+16/2;     // 2HD
 #endif
 
   // INDEX=IO6 == PD6
@@ -172,7 +197,7 @@ void read_track(void) {
     "ldi %[v_bit_cnt],0xff"           "\n\t"
     "clr %[v_index_passed]"           "\n\t"
 
-    "cli"                             "\n\t"
+    "cli"                             "\n\t"  // Disable all interrupts
 
     // Wait for the index hole
     "L_IDX0_%=:"                      "\n\t"
@@ -202,15 +227,14 @@ void read_track(void) {
     "sbi %[io_tifr1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
     "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"  // Read ICR1L
 
-    // Quantize captured value (val+v_cell_ofst)/div
+    // Quantize captured value (val+v_cell_ofst)/cell_size
     "add %[v_ic_val],%[v_cell_ofst]"  "\n\t"
 #if DATA_DATE == FLP_DR_500K
     "lsr %[v_ic_val]"                 "\n\t"
 #endif
     "swap %[v_ic_val]"                "\n\t"  // swap == right shift for 4bits
-    "andi %[v_ic_val],0x03"           "\n\t"
+    "andi %[v_ic_val],0x07"           "\n\t"
 
-    "inc %[v_ic_val]"                 "\n\t"
     "add %[v_bit_cnt],%[v_ic_val]"    "\n\t"  // bit_cnt += quantized_val
     "cpi %[v_bit_cnt],6"              "\n\t"
     "brlo L_skip_%="                  "\n\t"  // if bitcnt < 6, then skip
@@ -229,13 +253,12 @@ void read_track(void) {
 
     "L_skip_%=:"                      "\n\t"  // Make 1<<bit_cnt value
     "mov r16,%[v_bit_cnt]"            "\n\t"
-    "clr r17"                         "\n\t"
-    "sec"                             "\n\t"  // Set carry flag
+    "ldi r17,1"                       "\n\t"
     "L_SHIFT0_%=:"                    "\n\t"
-    "rol r17"                         "\n\t"
-    "cpi r16,0"                       "\n\t"
+    "cpi r16,0"                      "\n\t"
     "breq L_SHIFT1_%="                "\n\t"
     "dec r16"                         "\n\t"
+    "lsl r17"                         "\n\t"
     "rjmp L_SHIFT0_%="                "\n\t"
     "L_SHIFT1_%=:"                    "\n\t"
     "or %[v_bit_buf],r17"             "\n\t"  // bit_buf |= 1<<bit_cnt
@@ -246,7 +269,7 @@ void read_track(void) {
     "breq L_MAIN_LOOP_%="             "\n\t"
     "sbic %[io_pind],%[bit_index]"    "\n\t"
     "rjmp L_MAIN_LOOP_%="             "\n\t"
-    "sei"                             "\n\t"
+    "sei"                             "\n\t"  // Enable all interrupts
     : [v_bit_buf]   "+r" (bit_buf),
       [v_bit_cnt]   "+r" (bit_cnt),
       [v_ic_val]    "+r" (ic_val),
@@ -306,11 +329,11 @@ void rt_test(void)
 }
 
 void check_data_cell_size(void) {
-  noInterrupts();
   byte histogram[128];
   byte filtered[128];
   for(int i=0; i<128; i++) histogram[i] = filtered[i] = 0;
 
+  noInterrupts();
   TCNT1 = 0;
   TIFR1 |= 1<<ICF1;
   for(int i=0; i<512; i++) {
@@ -321,12 +344,14 @@ void check_data_cell_size(void) {
     histogram[val/2]++;
   }
   interrupts();
-#if 0
+#if 1
+  // Display simple histogram of pulse period distribution
   for(int i=0; i<128; i++) {
     Serial.print(i*2);
     Serial.print(" ");
     Serial.println(histogram[i]);
   }
+  while(true) ;
 #endif
 
   for(int i=0+2; i<128-2; i++) {
