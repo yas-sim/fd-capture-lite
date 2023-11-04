@@ -1,4 +1,5 @@
 import sys
+import re
 
 # PySerial is required - pip install pyserial
 import serial
@@ -63,6 +64,15 @@ def set_string(barray:bytearray, pos:int, val:str):
     for d, c in enumerate(val):
         barray[pos+d] = ord(c)
 
+def dump_byte_buffer(buff, pos=-1):
+    for cnt, dt in enumerate(buff):
+        if cnt % 0x10==0:
+            print(f'\n{cnt:04x} ', end='')
+        if (dt>=0x20 or dt<=0x7e) and pos!=cnt:
+            print(f' {dt:02x} ', end='')
+        else:
+            print(f'*{dt:02x} ', end='')
+    print()
 
 def write_mfm_image(track_images, file_name:str):
     mfm_header_pos           = 0
@@ -142,10 +152,17 @@ def main():
 
     reading = False
     while True:
+        buf = uart.readline()
         try:
-            line = uart.readline().decode('utf-8').rstrip('\n').rstrip('\r')
-        except UnicodeDecodeError:
-            continue
+            line = buf.decode('utf-8').rstrip('\n').rstrip('\r')
+        except UnicodeDecodeError as ex:
+            print()
+            match = re.search(r'position (\d+):', str(ex))
+            err_pos = int(match.groups()[0])
+            dump_byte_buffer(buf, err_pos)
+            print(f'Unicode decode error. Pos=0x{err_pos:04x}')
+            sys.exit()
+
         if line[:2]=='++':
             if line[:8]=='++START':
                 reading = True

@@ -264,6 +264,7 @@ void read_track(byte cell_ofst=0) {
     "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
     "sbrs r16,%[bit_UDRE0]"           "\n\t"
     "rjmp L_WAIT_UDRE0_%="            "\n\t"
+    "andi %[v_bit_buf],0x7f"          "\n\t"  // Safe guard
     "sts %[io_UDR0],%[v_bit_buf]"     "\n\t"  // y==UDR0, output encoded data to USART
     "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
     "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0
@@ -346,7 +347,7 @@ void rt_test(void)
 }
 
 
-// Read floppy disk and make a histogram of pulse period
+// Read floppy disk and make a histogram of pulse-period
 // to check software latency and actual pulse period.
 //
 // This routine uses the identical inline-asm code as 
@@ -466,6 +467,7 @@ byte check_data_cell_size_and_estimate_offset(void) {
 
   for(int i=0; i<128; i++) histogram[i] = filtered[i] = 0;
 
+  Serial.println("@@Checking pulse condition of the floppy disk.");
   while(true) {
     get_histogram(histogram);
     smooth_histogram(histogram, filtered);
@@ -476,12 +478,17 @@ byte check_data_cell_size_and_estimate_offset(void) {
 #endif
 
     find_3_peaks_from_histogram(filtered, peaks);
-    if(peaks[2]==0) continue;     // start over
-
+    if(peaks[2]==0) {
+      Serial.println("@@Failed...Starting over.");
+      continue; // start over
+    }
     cell_size = ((peaks[1]-peaks[0]) + (peaks[2]-peaks[1]))/2;
     capture_offset = cell_size*2 - peaks[0];
 
-    if(capture_offset>(32*1.5)) continue; // start over
+    if(capture_offset>(32*1.5)) {
+      Serial.println("@@Failed...Starting over.");
+      continue; // start over
+    }
 
     break;
   }
