@@ -42,7 +42,7 @@
 #if MEDIA_TYPE==FLP_2HD
 #define DATA_RATE FLP_DR_1M
 #else
-#define DATA_DATE FLP_DR_500K
+#define DATA_RATE FLP_DR_500K
 #endif
 
 #if NUM_MEDIA_TRACK > NUM_FDD_TRACK
@@ -203,17 +203,20 @@ void read_track(byte cell_ofst=0) {
   // Peak1=22count, Peak2=40count, Peak3=56count
   //    32-22=10        40-32=8     64-56=8
   //
+  //  2 => '01', 3 => '001', 4 => '0001'
+  //
   // ; TCNT1 count might be smaller than expected ideal counts in 8 to 10 counts. (Due to TCNT1 clear delay in SW)
   if(cell_ofst==0) {
-#if DATA_DATE == FLP_DR_500K
-    cell_ofst = 10+32/2;     // 2D
+#if DATA_RATE == FLP_DR_1M
+    cell_ofst = 8+16/2;     // 2HD
 #else
-    cell_ofst = 10+16/2;     // 2HD
+    cell_ofst = 8+32/2;     // 2D
 #endif
   }
+
   Serial.print("==");
   Serial.flush();
-  delay(100);
+  delay(50);
 
   // INDEX=IO6 == PD6
   asm volatile(
@@ -253,18 +256,19 @@ void read_track(byte cell_ofst=0) {
 
     // Quantize captured value (val+v_cell_ofst)/cell_size
     "add %[v_ic_val],%[v_cell_ofst]"  "\n\t"
-#if DATA_DATE == FLP_DR_500K
+#if DATA_RATE == FLP_DR_500K
     "lsr %[v_ic_val]"                 "\n\t"
-#endif
-    "swap %[v_ic_val]"                "\n\t"  // swap == right shift for 4bits
+    "swap %[v_ic_val]"                "\n\t"  // swap ~= right shift for 4bits
     "andi %[v_ic_val],0x0f"           "\n\t"
-    //"cpi %[v_ic_val],0x06"            "\n\t"
-    //"brcs L_limit_%="                 "\n\t"
-    //"ldi %[v_ic_val],0x06"            "\n\t"  // limit the pulse period to 6
-    //"L_limit_%=:"                     "\n\t"
+#elif DATA_RATE == FLP_DR_1M
+    "swap %[v_ic_val]"                "\n\t"  // swap ~= right shift for 4bits
+    "andi %[v_ic_val],0x0f"           "\n\t"
+#else
+#error Wrong data rate setting.
+#endif
     "add %[v_bit_cnt],%[v_ic_val]"    "\n\t"  // bit_cnt += quantized_val
 
-    "L_usart_loop_%=:"                "\n\t"
+    "L_USART_loop_%=:"                "\n\t"
     "cpi %[v_bit_cnt],6"              "\n\t"
     "brcs L_skip_usart%="             "\n\t"  // if bitcnt >= 6, then output the bit buffer to USART
 
@@ -276,19 +280,18 @@ void read_track(byte cell_ofst=0) {
     "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
     "sbrs r16,%[bit_UDRE0]"           "\n\t"
     "rjmp L_WAIT_UDRE0_%="            "\n\t"
-    //"andi r17,0x7f"                   "\n\t"  // Safe guard
     "sts %[io_UDR0],r17"              "\n\t"  // y==UDR0, output encoded data to USART
     "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
     "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0
-    "rjmp L_usart_loop_%="            "\n\t"
+    "rjmp L_USART_loop_%="            "\n\t"
 
     "L_skip_usart%=:"                 "\n\t"  // Make 1<<bit_cnt value
     "mov r16,%[v_bit_cnt]"            "\n\t"
     "clr r17"                         "\n\t"
-    "sec"                             "\n\t"  // C flag = 1
+    "sec"                             "\n\t"  // Carry = 1
     "L_SHIFT0_%=:"                    "\n\t"
     "rol r17"                         "\n\t"
-    "subi r16,1"                      "\n\t"  // 'dec' instruction doesn't affect C flag
+    "subi r16,1"                      "\n\t"
     "brcc L_SHIFT0_%="                "\n\t"
     "or %[v_bit_buf],r17"             "\n\t"  // bit_buf |= 1<<bit_cnt
 

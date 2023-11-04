@@ -1,5 +1,5 @@
 # Options: "2D" / "2DD" / "2HD"
-MEDIA_TYPE = "2DD"
+MEDIA_TYPE = "2D"
 
 
 import sys
@@ -176,7 +176,7 @@ def main():
         elif line[:2]=='@@':                    # Message
             print(f'[ARDUINO] {line[2:]}')
         elif line[:2]=='==' and reading==True:  # Data
-            track_buffers.append(line)
+            track_buffers.append(line[2:])
             print(f'{track_count:d} ', end='', flush=True)
             track_count+=1
     uart.close();
