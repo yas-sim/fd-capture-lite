@@ -52,20 +52,25 @@ pip install -r requisites.txt
 
 ## Log example
 ~~~sh
->python fd-capture-lite.py
+python fd-capture-lite.py
 ** FD-CAPTURE-LITE
-Searching for Arduino
-Arduino is found on "COM8"
-Floppy media type setting (Host,Python) = 2D
-Floppy media type setting (Arduino) = 2D
-FDD type setting (Arduino) = 2HD
-Checking pulse condition of the floppy disk.
-Peaks = 56 88 120
-Estimated cell size = 32
-Estimated input capture offset = 8
-Recommended total offset = 24
-  0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40  41  42  43  44  45  46  47  48  49  50  51  52  53  54  55  56  57  58  59  60  61  62  63  64  65  66  67  68  69  70  71  72  73  74  75  76  77  78  79
-Image read completed.
-Converting read data into MFM disk image data
-Completed -> "image.mfm".
+[HOST] Searching for Arduino
+[HOST] Arduino is found on "COM8"
+[HOST] Floppy media type setting = 2D
+[ARDUINO] Floppy media type setting = 2D
+[ARDUINO] FDD type setting = 2HD
+[ARDUINO] Number of step pulse(s) per track = 2
+[ARDUINO] Checking pulse condition of the floppy disk.
+[ARDUINO] Peaks = 54 88 120
+[ARDUINO] Estimated cell size = 33
+[ARDUINO] Estimated input capture offset = 12
+[ARDUINO] Recommended total offset = 28
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
+[HOST] Image read completed.
+[HOST] Converting read data into MFM disk image data
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
+[HOST] Completed -> "image.mfm".
 ~~~
+
+## Note
+- The host program is tested on a Windows 11 system.

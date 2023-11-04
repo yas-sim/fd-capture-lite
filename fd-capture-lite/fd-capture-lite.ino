@@ -22,21 +22,21 @@
 //---------------------------------------------------
 
 #if FDD_TYPE==FLP_2DD || FDD_TYPE==FLP_2HD
-#define FDD_TRACK_NUM (80)
+#define NUM_FDD_TRACK (80)
 #else
-#define FDD_TRACK_NUM (40)
+#define NUM_FDD_TRACK (40)
 #endif
 
 #if MEDIA_TYPE==FLP_2DD || MEDIA_TYPE==FLP_2HD
-#define MEDIA_TRACK_NUM (80)
+#define NUM_MEDIA_TRACK (80)
 #else
-#define MEDIA_TRACK_NUM (40)
+#define NUM_MEDIA_TRACK (40)
 #endif
 
-#if MEDIA_TRACK_NUM==80 && FDD_TRACK_NUM==160
-#define STEP_PULSE (2)
+#if NUM_MEDIA_TRACK==40 && NUM_FDD_TRACK==80
+#define NUM_STEP_PULSE (2)
 #else
-#define STEP_PULSE (1)
+#define NUM_STEP_PULSE (1)
 #endif
 
 #if MEDIA_TYPE==FLP_2HD
@@ -45,7 +45,7 @@
 #define DATA_DATE FLP_DR_500K
 #endif
 
-#if MEDIA_TRACK_NUM > FDD_TRACK_NUM
+#if NUM_MEDIA_TRACK > NUM_FDD_TRACK
 #error Media type and FDD type mismatch.
 #endif
 
@@ -56,6 +56,14 @@
 //  ICP1 = 14pin (PB0 (ICP1/CLKO/PCINT0))  -> IO8 on Arduino expansion connector
 
 // Arduino pin assignment
+//
+// The 'RD' signal from FDD must be connected to Arduino D8 port. This program
+// requires input capture function on 16-bit timer 1. The input port for the 
+// input capture on timer 1 is D8.
+//
+// Other signals can be assigned to any digital ports except D0 and D1. 
+// (D0 and D1 are used for serial communication (USART))
+//
 // IO2 = STEP      (FD-20)
 // IO3 = HEAD LOAD (FD-4)
 // IO4 = M_ON      (FD-16)
@@ -65,25 +73,22 @@
 // IO8 = RD        (FD-30)
 // IO9 = DIR       (FD-18)
 
-
 #define FDD_INDEX     (6) /* PD6 */
 #define FDD_DIR       (9) /* PB1 */
 #define FDD_STEP      (2) /* PD2 */
 #define FDD_TRK00     (7) /* PD7 */
-#define FDD_RD        (8) /* PB1/ICP1 */
+#define FDD_RD        (8) /* PB1/ICP1 ** DO NOT MODIFY ** */
 #define FDD_SIDE1     (5) /* PD5 */
 
 #define FDD_HEAD_LOAD (3) /* PD3 */
 #define FDD_M_ON      (4) /* PD4 */
-
-#define LED_BUILTIN (13)
 
 bool fdd_is_trk00(void) {
   return digitalRead(FDD_TRK00)==0?true:false;
 }
 
 bool fdd_step(void) {
-  for(byte i=0; i<STEP_PULSE; i++) {
+  for(byte i=0; i<NUM_STEP_PULSE; i++) {
     digitalWrite(FDD_STEP, LOW);
     delay(5);
     digitalWrite(FDD_STEP, HIGH);
@@ -121,9 +126,7 @@ inline void fdd_wait_index(void) {
 }
 
 void init_io(void) {
-  Serial.begin(2e6);              // 2Mbps
-
-  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.begin(2e6);              // USART 2Mbps
 
   digitalWrite(FDD_DIR, HIGH);
   digitalWrite(FDD_STEP, HIGH);
@@ -145,25 +148,25 @@ void init_io(void) {
   bitWrite(ACSR, ACIC, 0);    // Disable analog comparator input capture
   TCCR1A = 0b00000000;
   // TCCR1B
-  // b7   = Input capture 1 noise canceller (0=Disable)
-  // b6   = Input capture 1 edge select (0=Falling, 1=Rising)
+  // b7   = ICNC1 - Input capture 1 noise canceller (0=Disable)
+  // b6   = ICES1 - Input capture 1 edge select (0=Falling, 1=Rising)
   // b2:0 = Clock select (001=CLKio/1 (no prescaler), 010=CLKio/8, 011=CLKio/64, 100=CLKio/256, 101=CLKio/1024)
-  TCCR1B = 0b00000001;
+  TCCR1B = 0b00000001; // | (1<<ICNC1) | (1<<ICES1);
   TCCR1C = 0b00000000;
-  // TImer1 interrupt
+  // Timer1 interrupt
   TIMSK1 = 0b00000000;
 }
 
 
 void show_arduino_settings(void) {
-  Serial.print("@@Floppy media type setting (Arduino) = ");
+  Serial.print("@@Floppy media type setting = ");
   switch(MEDIA_TYPE) {
     case FLP_2D:  Serial.println("2D");   break;
     case FLP_2DD: Serial.println("2DD");  break;
     case FLP_2HD: Serial.println("2HD");  break;
     default:      Serial.println("*UNKNOWN*"); break;
   }
-  Serial.print("@@FDD type setting (Arduino) = ");
+  Serial.print("@@FDD type setting = ");
   switch(FDD_TYPE) {
     case FLP_2D:  Serial.println("2D");   break;
     case FLP_2DD: Serial.println("2DD");  break;
@@ -171,6 +174,7 @@ void show_arduino_settings(void) {
     default:      Serial.println("*UNKNOWN*"); break;
   }
 }
+
 
 void read_track(byte cell_ofst=0) {
   byte ic_val = 0;
@@ -253,35 +257,39 @@ void read_track(byte cell_ofst=0) {
     "lsr %[v_ic_val]"                 "\n\t"
 #endif
     "swap %[v_ic_val]"                "\n\t"  // swap == right shift for 4bits
-    "andi %[v_ic_val],0x07"           "\n\t"
-
+    "andi %[v_ic_val],0x0f"           "\n\t"
+    //"cpi %[v_ic_val],0x06"            "\n\t"
+    //"brcs L_limit_%="                 "\n\t"
+    //"ldi %[v_ic_val],0x06"            "\n\t"  // limit the pulse period to 6
+    //"L_limit_%=:"                     "\n\t"
     "add %[v_bit_cnt],%[v_ic_val]"    "\n\t"  // bit_cnt += quantized_val
+
+    "L_usart_loop_%=:"                "\n\t"
     "cpi %[v_bit_cnt],6"              "\n\t"
-    "brlo L_skip_%="                  "\n\t"  // if bitcnt < 6, then skip
+    "brcs L_skip_usart%="             "\n\t"  // if bitcnt >= 6, then output the bit buffer to USART
 
     // Encode to a printable charactor
     "ldi r17,0x20"                    "\n\t"
-    "add %[v_bit_buf],r17"            "\n\t"
+    "add r17,%[v_bit_buf]"            "\n\t"
     // Wait for UDRE0 (USART0 data register empty)
     "L_WAIT_UDRE0_%=:"                "\n\t"
     "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
     "sbrs r16,%[bit_UDRE0]"           "\n\t"
     "rjmp L_WAIT_UDRE0_%="            "\n\t"
-    "andi %[v_bit_buf],0x7f"          "\n\t"  // Safe guard
-    "sts %[io_UDR0],%[v_bit_buf]"     "\n\t"  // y==UDR0, output encoded data to USART
+    //"andi r17,0x7f"                   "\n\t"  // Safe guard
+    "sts %[io_UDR0],r17"              "\n\t"  // y==UDR0, output encoded data to USART
     "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
     "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0
+    "rjmp L_usart_loop_%="            "\n\t"
 
-    "L_skip_%=:"                      "\n\t"  // Make 1<<bit_cnt value
+    "L_skip_usart%=:"                 "\n\t"  // Make 1<<bit_cnt value
     "mov r16,%[v_bit_cnt]"            "\n\t"
-    "ldi r17,1"                       "\n\t"
+    "clr r17"                         "\n\t"
+    "sec"                             "\n\t"  // C flag = 1
     "L_SHIFT0_%=:"                    "\n\t"
-    "cpi r16,0"                      "\n\t"
-    "breq L_SHIFT1_%="                "\n\t"
-    "dec r16"                         "\n\t"
-    "lsl r17"                         "\n\t"
-    "rjmp L_SHIFT0_%="                "\n\t"
-    "L_SHIFT1_%=:"                    "\n\t"
+    "rol r17"                         "\n\t"
+    "subi r16,1"                      "\n\t"  // 'dec' instruction doesn't affect C flag
+    "brcc L_SHIFT0_%="                "\n\t"
     "or %[v_bit_buf],r17"             "\n\t"  // bit_buf |= 1<<bit_cnt
 
     "sbic %[io_PIND],%[bit_index]"    "\n\t"
@@ -544,26 +552,25 @@ void loop() {
   while(true) ;
 #endif
 
+  Serial.print("@@Number of step pulse(s) per track = ");
+  Serial.println(NUM_STEP_PULSE);
+
   byte offset = check_data_cell_size_and_estimate_offset();
 
   int max_track = 0;
 #if TEST_MODE==1
   max_track = 4;
 #else
-  max_track = MEDIA_TRACK_NUM;
+  max_track = NUM_MEDIA_TRACK;
 #endif
 
   for(byte trk=0; trk<max_track; trk++) {
     fdd_side(0);
-    digitalWrite(LED_BUILTIN, HIGH);
     read_track(offset);
-    digitalWrite(LED_BUILTIN, LOW);
     Serial.println();
 
     fdd_side(1);
-    digitalWrite(LED_BUILTIN, HIGH);
     read_track(offset);
-    digitalWrite(LED_BUILTIN, LOW);
     Serial.println();
 
     fdd_step_in();

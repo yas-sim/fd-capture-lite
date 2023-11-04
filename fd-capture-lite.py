@@ -1,12 +1,16 @@
+# Options: "2D" / "2DD" / "2HD"
+MEDIA_TYPE = "2D"
+
+
 import sys
 import re
 
-# PySerial is required - pip install pyserial
-import serial
-from serial.tools import list_ports
-
-# 2D / 2DD / 2HD
-MEDIA_TYPE = "2D"
+try:
+    import serial
+    from serial.tools import list_ports
+except ModuleNotFoundError as ex:
+    print('This program requires "pyserial". Install it with "pip install pyserial" command., and try again')
+    sys.exit()
 
 class bitarray:
     def __init__(self):
@@ -129,17 +133,17 @@ def main():
     print("** FD-CAPTURE-LITE")
 
     # Search an Arduino and open UART
-    print('Searching for Arduino')
+    print('[HOST] Searching for Arduino')
     arduino_port = detect_arduino()
     if arduino_port is None:
-        print('Arduino is not found')
+        print('[ERROR] Arduino is not found')
         sys.exit(1)
     else:
-        print('Arduino is found on "{}"'.format(arduino_port))
+        print('[HOST] Arduino is found on "{}"'.format(arduino_port))
     try:
         uart = serial.Serial(arduino_port, baudrate=2e6, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE)
     except serial.serialutil.SerialException:
-        print('ERROR : ' + arduino_port + ' is in use.')
+        print(f'[ERROR] {arduino_port} is in use.')
         sys.exit(1)
 
     uart.reset_input_buffer()
@@ -148,7 +152,7 @@ def main():
     track_buffers = []
     track_count = 0
 
-    print(f"Floppy media type setting (Host,Python) = {MEDIA_TYPE}")
+    print(f"[HOST] Floppy media type setting = {MEDIA_TYPE}")
 
     reading = False
     while True:
@@ -160,7 +164,7 @@ def main():
             match = re.search(r'position (\d+):', str(ex))
             err_pos = int(match.groups()[0])
             dump_byte_buffer(buf, err_pos)
-            print(f'Unicode decode error. Pos=0x{err_pos:04x}')
+            print(f'[ERROR] Unicode decode error. Pos=0x{err_pos:04x}')
             sys.exit()
 
         if line[:2]=='++':                      # Signal
@@ -170,23 +174,25 @@ def main():
                 reading = False
                 break
         elif line[:2]=='@@':                    # Message
-            print(line[2:])
+            print(f'[ARDUINO] {line[2:]}')
         elif line[:2]=='==' and reading==True:  # Data
             track_buffers.append(line)
-            print(f'{track_count:3d} ', end='', flush=True)
+            print(f'{track_count:d} ', end='', flush=True)
             track_count+=1
     uart.close();
 
     print()    
-    print('Image read completed.')
-    print('Converting read data into MFM disk image data')
+    print('[HOST] Image read completed.')
+    print('[HOST] Converting read data into MFM disk image data')
     track_images = []
-    for trk in track_buffers:
+    for trk_n, trk in enumerate(track_buffers):
+        print(f'{trk_n} ', end='', flush=True)
         track_images.append(decode_to_track_image(trk))
+    print()
 
     image_file_name = 'image.mfm'
     write_mfm_image(track_images, image_file_name)
-    print(f'Completed -> "{image_file_name}".')
+    print(f'[HOST] Completed -> "{image_file_name}".')
 
 if __name__ == "__main__":
     main()
