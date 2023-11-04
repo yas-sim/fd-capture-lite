@@ -10,14 +10,14 @@
 
 // To determine data rate (bit rate)
 // Options: FLP_2D, FLP_2DD, FLP_2HD
-#define MEDIA_TYPE FLP_2D
+#define MEDIA_TYPE FLP_2HD
 
 // To determine which single or double step-pulse to use.
 // Options: FLP_2D, FLP_2DD, FLP_2HD
 #define FDD_TYPE FLP_2HD
 
 // Options: 0=Normal, 1=Test (read only 4 tracks)
-#define TEST_MODE     (0)
+#define TEST_MODE     (1)
 
 //---------------------------------------------------
 
@@ -275,11 +275,13 @@ void read_track(byte cell_ofst=0) {
     // Encode to a printable charactor
     "ldi r17,0x20"                    "\n\t"
     "add r17,%[v_bit_buf]"            "\n\t"
+#if 0
     // Wait for UDRE0 (USART0 data register empty)
     "L_WAIT_UDRE0_%=:"                "\n\t"
     "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
     "sbrs r16,%[bit_UDRE0]"           "\n\t"
     "rjmp L_WAIT_UDRE0_%="            "\n\t"
+#endif
     "sts %[io_UDR0],r17"              "\n\t"  // y==UDR0, output encoded data to USART
     "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
     "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0

@@ -1,5 +1,5 @@
 # Options: "2D" / "2DD" / "2HD"
-MEDIA_TYPE = "2D"
+MEDIA_TYPE = "2HD"
 
 
 import sys
@@ -41,7 +41,7 @@ def decode_to_track_image(track_encoded):
     if MEDIA_TYPE == "2D" or MEDIA_TYPE == "2DD":
         samples_per_cell = 8            # 2DD
     else:
-        samples_per_cell = 4            # 2HD
+        samples_per_cell = 8            # 2HD
     out_buf = bitarray()
     for enc in track_encoded:
         decoded = ord(enc) - 0x20
@@ -90,9 +90,10 @@ def write_mfm_image(track_images, file_name:str):
     set_uint64(mfm_header, 24, 0.2/1e-9)            # spindle rotation time (ns)
     if MEDIA_TYPE == "2D" or MEDIA_TYPE == "2DD":
         set_uint64(mfm_header, 32, 500e3)           # data bit rate (2d/2dd=500k)
+        set_uint64(mfm_header, 40, 4e6)                 # sample rate (4MHz)
     else:
         set_uint64(mfm_header, 32, 1e6)             # data bit rate (2hd=1M)
-    set_uint64(mfm_header, 40, 4e6)                 # sample rate (4MHz)
+        set_uint64(mfm_header, 40, 8e6)             # sample rate (8MHz)
 
     if MEDIA_TYPE == "2D":
         track_table = bytearray(16*(80+4))
