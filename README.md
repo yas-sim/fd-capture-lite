@@ -25,7 +25,7 @@ pip install -r requisites.txt
 
 ----
 |Signal|[Arduino shield pins](https://docs.arduino.cc/static/6ec5e4c2a6c0e9e46389d4f6dc924073/2f891/Pinout-UNOrev3_latest.png)|FDD 34pin conn|Note|
-|---|---|---|---|
+|:-:|:-:|:-:|---|
 |STEP|D2|20||
 |HEAD LOAD|D3|4|You can connect this signal to GND. The Arduino firmware drives this signal to LOW all the time.|
 |MOTOR ON|D4|16|You can connect this signal to GND. The Arduino firmware drives this signal to LOW all the time.|
