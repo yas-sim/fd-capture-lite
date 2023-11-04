@@ -478,7 +478,7 @@ byte check_data_cell_size_and_estimate_offset(void) {
 
   for(int i=0; i<128; i++) histogram[i] = filtered[i] = 0;
 
-  Serial.println("@@Checking pulse condition of the floppy disk.");
+  Serial.println("@@Checking data pulse condition of the floppy disk.");
   while(true) {
     get_histogram(histogram);
     smooth_histogram(histogram, filtered);
@@ -504,20 +504,20 @@ byte check_data_cell_size_and_estimate_offset(void) {
     break;
   }
 
-  Serial.print("@@Peaks = ");
+  Serial.print("@@    Peaks = ");
   for(int i=0; i<3; i++) {
     Serial.print(peaks[i]);
     Serial.print(" ");
   }
   Serial.println();
-  Serial.print("@@Estimated cell size = ");
+  Serial.print("@@    Estimated cell size = ");
   Serial.println(cell_size);
 
-  Serial.print("@@Estimated input capture offset = ");
+  Serial.print("@@    Estimated input capture offset = ");
   Serial.println(capture_offset);
 
   byte recommended_offset = capture_offset + cell_size/2;
-  Serial.print("@@Recommended total offset = ");
+  Serial.print("@@    Recommended total offset = ");
   Serial.println(recommended_offset);
 
   return recommended_offset;

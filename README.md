@@ -50,7 +50,7 @@ pip install -r requisites.txt
 
 ------------------------
 
-## Log example
+## Log example 1
 ~~~sh
 python fd-capture-lite.py
 ** FD-CAPTURE-LITE
@@ -70,6 +70,55 @@ python fd-capture-lite.py
 [HOST] Converting read data into MFM disk image data
 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
 [HOST] Completed -> "image.mfm".
+~~~
+
+## Log example 2
+Reading a disk image with fd-capture-lite, and convert the generated MFM file into D77 disk image format using the image_converter in the fdc_bitstream project.
+~~~sh
+N:\work\fd_capture_lite>python fd-capture-lite.py
+** FD-CAPTURE-LITE
+[HOST] Searching for Arduino
+[HOST] Arduino is found on "COM8"
+[HOST] Floppy media type setting = 2D
+[ARDUINO] Floppy media type setting = 2D
+[ARDUINO] FDD type setting = 2HD
+[ARDUINO] Number of step pulse(s) per track = 2
+[ARDUINO] Checking data pulse condition of the floppy disk.
+[ARDUINO]     Peaks = 54 88 120
+[ARDUINO]     Estimated cell size = 33
+[ARDUINO]     Estimated input capture offset = 12
+[ARDUINO]     Recommended total offset = 28
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
+[HOST] Image read completed.
+[HOST] Converting read data into MFM disk image data
+0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
+[HOST] Completed -> "image.mfm".
+
+N:\work\fd_capture_lite>python test1.py
+
+N:\work\fd_capture_lite>c:\Users\yas_s\source\repos\fdc_test\bin\Release\image_converter.exe -i image.mfm -o image.d77 -v
+Reading image.mfm.
+VFO type : 5
+Gain L=0.3 , Gain H=1
+   0:  16/   0     1:  16/   0     2:  16/   0     3:  16/   0     4:  16/   0
+   5:  16/   0     6:  16/   0     7:  16/   0     8:  16/   0     9:  16/   0
+  10:  16/   0    11:  16/   0    12:  16/   0    13:  17/   1    14:  16/   0
+  15:  16/   0    16:  15/   0    17:  16/   0    18:  16/   0    19:  16/   0
+  20:  16/   0    21:  16/   0    22:  16/   0    23:  16/   0    24:  16/   0
+  25:  16/   0    26:  16/   0    27:  16/   0    28:  16/   0    29:  16/   0
+  30:  16/   0    31:  16/   0    32:  16/   0    33:  16/   0    34:  16/   0
+  35:  16/   0    36:  16/   0    37:  16/   0    38:  16/   0    39:  16/   0
+  40:  16/   0    41:  16/   0    42:  16/   0    43:  16/   0    44:  16/   0
+  45:  16/   0    46:  16/   0    47:  16/   0    48:  16/   0    49:  16/   0
+  50:  16/   0    51:  16/   0    52:  16/   0    53:  16/   0    54:  16/   0
+  55:  16/   0    56:  16/   0    57:  16/   0    58:  16/   1    59:  16/   0
+  60:  16/   0    61:  16/   0    62:  16/   0    63:  16/   0    64:  16/   0
+  65:  16/   0    66:  16/   0    67:  16/   1    68:  16/   0    69:  16/   0
+  70:  16/   0    71:  16/   0    72:  16/   0    73:  16/   0    74:  16/   0
+  75:  16/   0    76:  16/   0    77:  16/   0    78:  16/   1    79:  16/   0
+
+**TOTAL RESULT(GOOD/BAD):1276 4
+image.mfm, -> image.d77
 ~~~
 
 ## Note

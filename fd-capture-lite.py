@@ -1,5 +1,5 @@
 # Options: "2D" / "2DD" / "2HD"
-MEDIA_TYPE = "2D"
+MEDIA_TYPE = "2DD"
 
 
 import sys
