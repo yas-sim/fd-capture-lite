@@ -207,6 +207,9 @@ void read_track(byte cell_ofst=0) {
     cell_ofst = 10+16/2;     // 2HD
 #endif
   }
+  Serial.print("==");
+  Serial.flush();
+  delay(100);
 
   // INDEX=IO6 == PD6
   asm volatile(

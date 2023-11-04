@@ -163,15 +163,15 @@ def main():
             print(f'Unicode decode error. Pos=0x{err_pos:04x}')
             sys.exit()
 
-        if line[:2]=='++':
+        if line[:2]=='++':                      # Signal
             if line[:8]=='++START':
                 reading = True
             elif line[:6]=='++END':
                 reading = False
                 break
-        elif line[:2]=='@@':
+        elif line[:2]=='@@':                    # Message
             print(line[2:])
-        elif reading==True:
+        elif line[:2]=='==' and reading==True:  # Data
             track_buffers.append(line)
             print(f'{track_count:3d} ', end='', flush=True)
             track_count+=1
