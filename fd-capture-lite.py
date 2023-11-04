@@ -5,7 +5,7 @@ import serial
 from serial.tools import list_ports
 
 # 2D / 2DD / 2HD
-MEDIA_TYPE = "2HD"
+MEDIA_TYPE = "2D"
 
 class bitarray:
     def __init__(self):
@@ -80,7 +80,10 @@ def write_mfm_image(track_images, file_name:str):
         set_uint64(mfm_header, 32, 1e6)             # data bit rate (2hd=1M)
     set_uint64(mfm_header, 40, 4e6)                 # sample rate (4MHz)
 
-    track_table = bytearray(16*84)
+    if MEDIA_TYPE == "2D":
+        track_table = bytearray(16*(80+4))
+    else:
+        track_table = bytearray(16*(160+4))
 
     track_data_pos = mfm_track_data_start_pos       # start position of actual track image data
     track_data_pos_list = []
@@ -113,6 +116,8 @@ def detect_arduino():
 
 
 def main():
+    print("** FD-CAPTURE-LITE")
+
     # Search an Arduino and open UART
     print('Searching for Arduino')
     arduino_port = detect_arduino()
@@ -133,11 +138,14 @@ def main():
     track_buffers = []
     track_count = 0
 
-    print(f"Floppy media type = {MEDIA_TYPE}")
+    print(f"Floppy media type setting (Host,Python) = {MEDIA_TYPE}")
 
     reading = False
     while True:
-        line = uart.readline().decode('utf-8').rstrip('\n').rstrip('\r')
+        try:
+            line = uart.readline().decode('utf-8').rstrip('\n').rstrip('\r')
+        except UnicodeDecodeError:
+            continue
         if line[:2]=='++':
             if line[:8]=='++START':
                 reading = True
@@ -150,6 +158,8 @@ def main():
             track_buffers.append(line)
             print(f'{track_count:3d} ', end='', flush=True)
             track_count+=1
+    uart.close();
+
     print()    
     print('Image read completed.')
     print('Converting read data into MFM disk image data')

@@ -16,9 +16,8 @@
 // Options: FLP_2D, FLP_2DD, FLP_2HD
 #define FDD_TYPE FLP_2HD
 
-// Options: 0=Normal, 1=Test
+// Options: 0=Normal, 1=Test (read only 4 tracks)
 #define TEST_MODE     (0)
-
 
 //---------------------------------------------------
 
@@ -156,8 +155,24 @@ void init_io(void) {
 }
 
 
+void show_arduino_settings(void) {
+  Serial.print("@@Floppy media type setting (Arduino) = ");
+  switch(MEDIA_TYPE) {
+    case FLP_2D:  Serial.println("2D");   break;
+    case FLP_2DD: Serial.println("2DD");  break;
+    case FLP_2HD: Serial.println("2HD");  break;
+    default:      Serial.println("*UNKNOWN*"); break;
+  }
+  Serial.print("@@FDD type setting (Arduino) = ");
+  switch(FDD_TYPE) {
+    case FLP_2D:  Serial.println("2D");   break;
+    case FLP_2DD: Serial.println("2DD");  break;
+    case FLP_2HD: Serial.println("2HD");  break;
+    default:      Serial.println("*UNKNOWN*"); break;
+  }
+}
 
-void read_track(void) {
+void read_track(byte cell_ofst=0) {
   byte ic_val = 0;
   byte bit_buf = 0;
   byte bit_cnt = 0;
@@ -185,11 +200,13 @@ void read_track(void) {
   //    32-22=10        40-32=8     64-56=8
   //
   // ; TCNT1 count might be smaller than expected ideal counts in 8 to 10 counts. (Due to TCNT1 clear delay in SW)
+  if(cell_ofst==0) {
 #if DATA_DATE == FLP_DR_500K
-  byte cell_ofst = 10+32/2;     // 2D
+    cell_ofst = 10+32/2;     // 2D
 #else
-  byte cell_ofst = 10+16/2;     // 2HD
+    cell_ofst = 10+16/2;     // 2HD
 #endif
+  }
 
   // INDEX=IO6 == PD6
   asm volatile(
@@ -201,30 +218,30 @@ void read_track(void) {
 
     // Wait for the index hole
     "L_IDX0_%=:"                      "\n\t"
-    "sbis %[io_pind],%[bit_index]"    "\n\t"
+    "sbis %[io_PIND],%[bit_index]"    "\n\t"
     "rjmp L_IDX0_%="                  "\n\t"
     "L_IDX1_%=:"                      "\n\t"
-    "sbic %[io_pind],%[bit_index]"    "\n\t"
+    "sbic %[io_PIND],%[bit_index]"    "\n\t"
     "rjmp L_IDX1_%="                  "\n\t"  // Index hole detected
 
     // Clear TCNT1
     "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
     "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
 
-    "sbi %[io_tifr1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+    "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
     "L_MAIN_LOOP_%=:"                 "\n\t"
 
     // Wait for input capture flag 1 on timer 1
     "L_WAIT_FOR_ICF1_%=:"             "\n\t"
-    "sbis %[io_tifr1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
+    "sbis %[io_TIFR1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
     "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
 
     // Clear TCNT1
     "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
     "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
 
-    "sbi %[io_tifr1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+    "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
     "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"  // Read ICR1L
 
     // Quantize captured value (val+v_cell_ofst)/cell_size
@@ -263,19 +280,19 @@ void read_track(void) {
     "L_SHIFT1_%=:"                    "\n\t"
     "or %[v_bit_buf],r17"             "\n\t"  // bit_buf |= 1<<bit_cnt
 
-    "sbic %[io_pind],%[bit_index]"    "\n\t"
+    "sbic %[io_PIND],%[bit_index]"    "\n\t"
     "ori %[v_index_passed],0x01"      "\n\t"
     "andi %[v_index_passed],0x01"     "\n\t"
     "breq L_MAIN_LOOP_%="             "\n\t"
-    "sbic %[io_pind],%[bit_index]"    "\n\t"
+    "sbic %[io_PIND],%[bit_index]"    "\n\t"
     "rjmp L_MAIN_LOOP_%="             "\n\t"
     "sei"                             "\n\t"  // Enable all interrupts
     : [v_bit_buf]   "+r" (bit_buf),
       [v_bit_cnt]   "+r" (bit_cnt),
       [v_ic_val]    "+r" (ic_val),
       [v_index_passed] "+r" (index_passed)
-    : [io_pind]   "I" (_SFR_IO_ADDR(PIND)), 
-      [io_tifr1]  "I" (_SFR_IO_ADDR(TIFR1)),
+    : [io_PIND]   "I" (_SFR_IO_ADDR(PIND)), 
+      [io_TIFR1]  "I" (_SFR_IO_ADDR(TIFR1)),
       [io_TCNT1H] "M" (_SFR_MEM_ADDR(TCNT1H)), 
       [io_TCNT1L] "M" (_SFR_MEM_ADDR(TCNT1L)),
       [io_ICR1H]  "M" (_SFR_MEM_ADDR(ICR1H)),
@@ -328,57 +345,107 @@ void rt_test(void)
   while(true);
 }
 
-void check_data_cell_size(void) {
-  byte histogram[128];
-  byte filtered[128];
-  for(int i=0; i<128; i++) histogram[i] = filtered[i] = 0;
 
-  noInterrupts();
-  TCNT1 = 0;
-  TIFR1 |= 1<<ICF1;
-  for(int i=0; i<512; i++) {
-    while((TIFR1 & (1<<ICF1))==0) ;
-    TCNT1 = 0;
-    byte val = ICR1L;
-    TIFR1 |= 1<<ICF1;
-    histogram[val/2]++;
-  }
-  interrupts();
-#if 1
-  // Display simple histogram of pulse period distribution
-  for(int i=0; i<128; i++) {
-    Serial.print(i*2);
+// Read floppy disk and make a histogram of pulse period
+// to check software latency and actual pulse period.
+//
+// This routine uses the identical inline-asm code as 
+// the 'read_track' routine.
+//
+// "byte buffer[]" must have 128 elements.
+void get_histogram(byte buffer[]) {
+  for(int i=0; i<128; i++) buffer[i] = 0;
+
+  byte ic_val;
+
+  asm volatile(
+    "movw r22,%[v_buffer]"            "\n\t"
+
+    "cli"                             "\n\t"  // Disable all interrupts
+
+    // Clear TCNT1
+    "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
+    "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
+
+    "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+
+    "L_MAIN_LOOP_%=:"                 "\n\t"
+
+    // Wait for input capture flag 1 on timer 1
+    "L_WAIT_FOR_ICF1_%=:"             "\n\t"
+    "sbis %[io_TIFR1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
+    "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
+
+    // Clear TCNT1
+    "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
+    "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
+
+    "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"  // Read ICR1L
+
+    "movw r26,r22"                    "\n\t"  // r27:r26 = xreg
+    "lsr %[v_ic_val]"                 "\n\t"
+    "add r26,%[v_ic_val]"             "\n\t"
+    "adc r27,__zero_reg__"            "\n\t"  // xreg += (v_ic_val>>1)
+    "ld r16,x"                        "\n\t"  // r16 = buff[v_ic_val>>1]
+    "cpi r16,255"                      "\n\t"  
+    "breq L_EXIT_%="                  "\n\t"  // if one_of_the_element reaches to 255, exit
+    "inc r16"                         "\n\t"  // buff[v_ic_val>>1]++
+    "st x,r16"                        "\n\t"
+    "rjmp L_MAIN_LOOP_%="             "\n\t"
+
+    "L_EXIT_%=:"                      "\n\t"
+    "sei"                             "\n\t"
+    : [v_ic_val]  "+r" (ic_val)
+    : [io_TIFR1]  "I" (_SFR_IO_ADDR(TIFR1)),
+      [io_TCNT1H] "M" (_SFR_MEM_ADDR(TCNT1H)), 
+      [io_TCNT1L] "M" (_SFR_MEM_ADDR(TCNT1L)),
+      [io_ICR1H]  "M" (_SFR_MEM_ADDR(ICR1H)),
+      [io_ICR1L]  "M" (_SFR_MEM_ADDR(ICR1L)),
+      [bit_ICF1]  "I" (ICF1),
+      [v_buffer] "e" ((uint16_t)buffer)
+    : "r16", 
+      "r22", "r23", 
+      "r26", "r27"    // regX
+    );
+}
+
+// "byte buf[]" must have 128 elements.
+void disp_histogram(byte buffer[]) {
+    for(int i=0; i<128; i++) {
+    Serial.print(i<<1);
     Serial.print(" ");
-    Serial.println(histogram[i]);
+    byte val = buffer[i];
+    for(int j=0; j<val; j++) {
+      Serial.print("#");
+    }
+    Serial.println();
   }
-  while(true) ;
-#endif
+}
 
+void smooth_histogram(byte inbuf[], byte outbuf[]) {
   for(int i=0+2; i<128-2; i++) {
-    filtered[i] = (
-      histogram[i-2]*1 +
-      histogram[i-1]*2 +
-      histogram[i  ]*4 +
-      histogram[i+1]*2 +
-      histogram[i+2]*1 ) / (1+2+4+2+1);
+    outbuf[i] = (
+      inbuf[i-2]*1 +
+      inbuf[i-1]*2 +
+      inbuf[i  ]*4 +
+      inbuf[i+1]*2 +
+      inbuf[i+2]*1 ) / (1+2+4+2+1);
   }
-#if 0
-  for(int i=0; i<128; i++) {
-    Serial.print(i*2);
-    Serial.print(" ");
-    Serial.println(filtered[i]);
-  }
-#endif
+}
 
-  // find 3 peaks
-  byte peaks[3];
+void find_3_peaks_from_histogram(byte histogram[], byte peaks[])
+{
   byte prev_peak_val = 255;
+
+  for(int i=0; i<3; i++) peaks[i] = 0;
+
   for(int i=0; i<3; i++) {
     byte peak_val = 0;
     byte peak_pos = 0;  
     for(int j=0+1; j<128-1; j++) {
-      byte curr_val = filtered[j];
-      if(filtered[j-1]<=curr_val && filtered[j+1]<=curr_val) {
+      byte curr_val = histogram[j];
+      if(histogram[j-1]<=curr_val && histogram[j+1]<=curr_val) {
         if(curr_val>peak_val && curr_val<prev_peak_val) {
           peak_pos = j*2;
           peak_val = curr_val;
@@ -388,15 +455,54 @@ void check_data_cell_size(void) {
     peaks[i] = peak_pos;
     prev_peak_val = peak_val;
   }
+}
+
+byte check_data_cell_size_and_estimate_offset(void) {
+  byte histogram[128];
+  byte filtered[128];
+  byte peaks[3];
+  byte cell_size;
+  byte capture_offset;
+
+  for(int i=0; i<128; i++) histogram[i] = filtered[i] = 0;
+
+  while(true) {
+    get_histogram(histogram);
+    smooth_histogram(histogram, filtered);
+
+#if 0
+    disp_histogram(histogram);
+    while(true) ;
+#endif
+
+    find_3_peaks_from_histogram(filtered, peaks);
+    if(peaks[2]==0) continue;     // start over
+
+    cell_size = ((peaks[1]-peaks[0]) + (peaks[2]-peaks[1]))/2;
+    capture_offset = cell_size*2 - peaks[0];
+
+    if(capture_offset>(32*1.5)) continue; // start over
+
+    break;
+  }
+
   Serial.print("@@Peaks = ");
   for(int i=0; i<3; i++) {
     Serial.print(peaks[i]);
     Serial.print(" ");
   }
   Serial.println();
-  byte cell_size = ((peaks[1]-peaks[0]) + (peaks[2]-peaks[1]))/2;
   Serial.print("@@Estimated cell size = ");
   Serial.println(cell_size);
+
+  Serial.print("@@Estimated input capture offset = ");
+  Serial.println(capture_offset);
+
+  byte recommended_offset = capture_offset + cell_size/2;
+  Serial.print("@@Recommended total offset = ");
+  Serial.println(recommended_offset);
+
+  return recommended_offset;
 }
 
 
@@ -412,31 +518,41 @@ void setup() {
 void loop() {
 
   Serial.println("** FD-CAPTURE-LITE");
+  show_arduino_settings();
   Serial.println("++START");
   Serial.flush();
   delay(500);
+
+#if 0
+  byte buf[128];
+  get_histogram(buf);
+  while(true) ;
+#endif
 
 #if 0
   rt_test();
   while(true) ;
 #endif
 
-  check_data_cell_size();
+  byte offset = check_data_cell_size_and_estimate_offset();
 
+  int max_track = 0;
 #if TEST_MODE==1
-  for(byte trk=0; trk<4; trk++) {
+  max_track = 4;
 #else
-  for(byte trk=0; trk<MEDIA_TRACK_NUM; trk++) {
+  max_track = MEDIA_TRACK_NUM;
 #endif
+
+  for(byte trk=0; trk<max_track; trk++) {
     fdd_side(0);
     digitalWrite(LED_BUILTIN, HIGH);
-    read_track();
+    read_track(offset);
     digitalWrite(LED_BUILTIN, LOW);
     Serial.println();
 
     fdd_side(1);
     digitalWrite(LED_BUILTIN, HIGH);
-    read_track();
+    read_track(offset);
     digitalWrite(LED_BUILTIN, LOW);
     Serial.println();
 
