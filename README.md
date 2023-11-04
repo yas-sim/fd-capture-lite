@@ -17,6 +17,12 @@ The FD-capture-lite has the following features:
 ## Hardware preparation - Arduino-FDD wiring
 You just need to use some jump-wires to connect FDD to Arduino directry.
 
+## Prerequisites
+The host program requires 'pyserial' module.
+~~~sh
+pip install -r requisites.txt
+~~~
+
 ----
 |Signal|[Arduino shield pins](https://docs.arduino.cc/static/6ec5e4c2a6c0e9e46389d4f6dc924073/2f891/Pinout-UNOrev3_latest.png)|FDD 34pin conn|Note|
 |---|---|---|---|
