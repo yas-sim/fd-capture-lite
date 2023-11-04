@@ -94,8 +94,6 @@ N:\work\fd_capture_lite>python fd-capture-lite.py
 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
 [HOST] Completed -> "image.mfm".
 
-N:\work\fd_capture_lite>python test1.py
-
 N:\work\fd_capture_lite>c:\Users\yas_s\source\repos\fdc_test\bin\Release\image_converter.exe -i image.mfm -o image.d77 -v
 Reading image.mfm.
 VFO type : 5

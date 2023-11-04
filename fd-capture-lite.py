@@ -9,7 +9,7 @@ try:
     import serial
     from serial.tools import list_ports
 except ModuleNotFoundError as ex:
-    print('This program requires "pyserial". Install it with "pip install pyserial" command., and try again')
+    print('[FATAL] This program requires "pyserial". Install it with "pip install pyserial" command., and try again')
     sys.exit()
 
 class bitarray:
