@@ -1,55 +1,10 @@
-#define FLP_2D        (0)
-#define FLP_2DD       (1)
-#define FLP_2HD       (2)
-
-#define FLP_DR_500K   (0)
-#define FLP_DR_1M     (1)
-
-//---------------------------------------------------
-
-
-// To determine data rate (bit rate)
-// Options: FLP_2D, FLP_2DD, FLP_2HD
-#define MEDIA_TYPE FLP_2HD
-
-// To determine which single or double step-pulse to use.
-// Options: FLP_2D, FLP_2DD, FLP_2HD
-#define FDD_TYPE FLP_2HD
-
 // Options: 0=Normal, 1=Test (read only 4 tracks)
-#define TEST_MODE     (1)
-
-//---------------------------------------------------
-
-#if FDD_TYPE==FLP_2DD || FDD_TYPE==FLP_2HD
-#define NUM_FDD_TRACK (80)
-#else
-#define NUM_FDD_TRACK (40)
-#endif
-
-#if MEDIA_TYPE==FLP_2DD || MEDIA_TYPE==FLP_2HD
-#define NUM_MEDIA_TRACK (80)
-#else
-#define NUM_MEDIA_TRACK (40)
-#endif
-
-#if NUM_MEDIA_TRACK==40 && NUM_FDD_TRACK==80
-#define NUM_STEP_PULSE (2)
-#else
-#define NUM_STEP_PULSE (1)
-#endif
-
-#if MEDIA_TYPE==FLP_2HD
-#define DATA_RATE FLP_DR_1M
-#else
-#define DATA_RATE FLP_DR_500K
-#endif
-
-#if NUM_MEDIA_TRACK > NUM_FDD_TRACK
-#error Media type and FDD type mismatch.
-#endif
+#define TEST_MODE     (0)
 
 
+
+byte g_media_max_track = 40;
+byte g_num_step_pulse = 1;
 
 // 16bit Timer1 (TC1) : FDD RD signal input capture
 // ATmega328P pin assignment
@@ -84,11 +39,11 @@
 #define FDD_M_ON      (4) /* PD4 */
 
 bool fdd_is_trk00(void) {
-  return digitalRead(FDD_TRK00)==0?true:false;
+  return digitalRead(FDD_TRK00)==LOW?true:false;
 }
 
 bool fdd_step(void) {
-  for(byte i=0; i<NUM_STEP_PULSE; i++) {
+  for(byte i=0; i<g_num_step_pulse; i++) {
     digitalWrite(FDD_STEP, LOW);
     delay(5);
     digitalWrite(FDD_STEP, HIGH);
@@ -113,7 +68,7 @@ void fdd_restore(void) {
 }
 
 void fdd_side(uint8_t side_sel) {
-  digitalWrite(FDD_SIDE1, side_sel==0?1:0);
+  digitalWrite(FDD_SIDE1, side_sel==0?HIGH:LOW);
 }
 
 inline bool fdd_index(void) {
@@ -157,26 +112,8 @@ void init_io(void) {
   TIMSK1 = 0b00000000;
 }
 
-
-void show_arduino_settings(void) {
-  Serial.print("@@Floppy media type setting = ");
-  switch(MEDIA_TYPE) {
-    case FLP_2D:  Serial.println("2D");   break;
-    case FLP_2DD: Serial.println("2DD");  break;
-    case FLP_2HD: Serial.println("2HD");  break;
-    default:      Serial.println("*UNKNOWN*"); break;
-  }
-  Serial.print("@@FDD type setting = ");
-  switch(FDD_TYPE) {
-    case FLP_2D:  Serial.println("2D");   break;
-    case FLP_2DD: Serial.println("2DD");  break;
-    case FLP_2HD: Serial.println("2HD");  break;
-    default:      Serial.println("*UNKNOWN*"); break;
-  }
-}
-
-
-void read_track(byte cell_ofst=0) {
+// data_rate = 0:500Kbps (2D/2DD), 1:1Mbps (2HD)
+void read_track(byte cell_ofst=0, byte data_rate=0) {
   byte ic_val = 0;
   byte bit_buf = 0;
   byte bit_cnt = 0;
@@ -237,6 +174,7 @@ void read_track(byte cell_ofst=0) {
     // Clear TCNT1
     "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
     "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
+    "clr r18"                         "\n\t"  // prev_ICR1L = 0
 
     "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
@@ -247,25 +185,17 @@ void read_track(byte cell_ofst=0) {
     "sbis %[io_TIFR1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
     "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
 
-    // Clear TCNT1
-    "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
-    "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
-
+    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"
+    "sub %[v_ic_val],r18"             "\n\t"  // ic_val = curr_ICR1L - prev_ICR1L
+    "lds r18,%[io_ICR1L]"             "\n\t"  // prev_ICR1L = ICR1L
     "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
-    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"  // Read ICR1L
 
     // Quantize captured value (val+v_cell_ofst)/cell_size
     "add %[v_ic_val],%[v_cell_ofst]"  "\n\t"
-#if DATA_RATE == FLP_DR_500K
+    "sbrs %[v_data_rate],0"           "\n\t"  // if data_rate.0 == 1, skip
     "lsr %[v_ic_val]"                 "\n\t"
     "swap %[v_ic_val]"                "\n\t"  // swap ~= right shift for 4bits
     "andi %[v_ic_val],0x0f"           "\n\t"
-#elif DATA_RATE == FLP_DR_1M
-    "swap %[v_ic_val]"                "\n\t"  // swap ~= right shift for 4bits
-    "andi %[v_ic_val],0x0f"           "\n\t"
-#else
-#error Wrong data rate setting.
-#endif
     "add %[v_bit_cnt],%[v_ic_val]"    "\n\t"  // bit_cnt += quantized_val
 
     "L_USART_loop_%=:"                "\n\t"
@@ -275,13 +205,13 @@ void read_track(byte cell_ofst=0) {
     // Encode to a printable charactor
     "ldi r17,0x20"                    "\n\t"
     "add r17,%[v_bit_buf]"            "\n\t"
-#if 0
+
     // Wait for UDRE0 (USART0 data register empty)
     "L_WAIT_UDRE0_%=:"                "\n\t"
     "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
     "sbrs r16,%[bit_UDRE0]"           "\n\t"
     "rjmp L_WAIT_UDRE0_%="            "\n\t"
-#endif
+
     "sts %[io_UDR0],r17"              "\n\t"  // y==UDR0, output encoded data to USART
     "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
     "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0
@@ -319,7 +249,8 @@ void read_track(byte cell_ofst=0) {
       [bit_index] "I" (6),
       [bit_ICF1]  "I" (ICF1),
       [bit_UDRE0] "I" (UDRE0),
-      [v_cell_ofst] "r" (cell_ofst)
+      [v_cell_ofst] "r" (cell_ofst),
+      [v_data_rate] "r" (data_rate)
     : "r16", "r17", "r18"
     );
 }
@@ -383,6 +314,7 @@ void get_histogram(byte buffer[]) {
     // Clear TCNT1
     "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
     "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
+    "clr r20"                         "\n\t"
 
     "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
@@ -393,12 +325,10 @@ void get_histogram(byte buffer[]) {
     "sbis %[io_TIFR1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
     "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
 
-    // Clear TCNT1
-    "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
-    "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
-
+    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"
+    "sub %[v_ic_val],r20"             "\n\t"  // ic_val = curr_ICR1L - prev_ICR1L
+    "lds r20,%[io_ICR1L]"             "\n\t"  // prev_ICR1L = ICR1L
     "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
-    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"  // Read ICR1L
 
     "movw r26,r22"                    "\n\t"  // r27:r26 = xreg
     "lsr %[v_ic_val]"                 "\n\t"
@@ -421,7 +351,7 @@ void get_histogram(byte buffer[]) {
       [io_ICR1L]  "M" (_SFR_MEM_ADDR(ICR1L)),
       [bit_ICF1]  "I" (ICF1),
       [v_buffer] "e" ((uint16_t)buffer)
-    : "r16", 
+    : "r16", "r20",
       "r22", "r23", 
       "r26", "r27"    // regX
     );
@@ -474,7 +404,8 @@ void find_3_peaks_from_histogram(byte histogram[], byte peaks[])
   }
 }
 
-byte check_data_cell_size_and_estimate_offset(void) {
+// data_rate 0=500Kbps (2D/2DD), 1=1Mbps (2HD)
+void check_data_cell_size_and_estimate_offset(byte *ofst, byte *data_rate) {
   byte histogram[128];
   byte filtered[128];
   byte peaks[3];
@@ -483,8 +414,17 @@ byte check_data_cell_size_and_estimate_offset(void) {
 
   for(int i=0; i<128; i++) histogram[i] = filtered[i] = 0;
 
-  Serial.println("@@Checking data pulse condition of the floppy disk.");
+  Serial.println(F("@@Checking data pulse condition of the floppy disk."));
+  int start_over_count = 0;
   while(true) {
+    if(start_over_count == 1) {
+      Serial.print(F("@@    Failed. Starting over."));
+    }
+    if(start_over_count > 0) {
+      Serial.print(".");
+      Serial.flush();
+    }
+    start_over_count++;
     get_histogram(histogram);
     smooth_histogram(histogram, filtered);
 
@@ -492,59 +432,111 @@ byte check_data_cell_size_and_estimate_offset(void) {
     disp_histogram(histogram);
     while(true) ;
 #endif
-
     find_3_peaks_from_histogram(filtered, peaks);
-    if(peaks[2]==0) {
-      Serial.println("@@Failed...Starting over.");
+    if(peaks[0]==0 || peaks[1]==0 || peaks[2]==0) {
       continue; // start over
     }
     cell_size = ((peaks[1]-peaks[0]) + (peaks[2]-peaks[1]))/2;
     capture_offset = cell_size*2 - peaks[0];
 
     if(capture_offset>(32*1.5)) {
-      Serial.println("@@Failed...Starting over.");
       continue; // start over
     }
-
     break;
   }
+  Serial.println();
 
-  Serial.print("@@    Peaks = ");
+  Serial.print(F("@@    Peaks of pulse-to-pulse time = "));
   for(int i=0; i<3; i++) {
     Serial.print(peaks[i]);
     Serial.print(" ");
   }
   Serial.println();
-  Serial.print("@@    Estimated cell size = ");
+  Serial.print(F("@@    Estimated cell size = "));
   Serial.println(cell_size);
 
-  Serial.print("@@    Estimated input capture offset = ");
+  Serial.print(F("@@    Estimated input capture offset = "));
   Serial.println(capture_offset);
 
   byte recommended_offset = capture_offset + cell_size/2;
-  Serial.print("@@    Recommended total offset = ");
+  Serial.print(F("@@    Recommended total offset = "));
   Serial.println(recommended_offset);
 
-  return recommended_offset;
+  *ofst = recommended_offset; 
+  *data_rate = (cell_size) <= (16+8) ? 1:0;   // 1=1Mbps (2HD), 0=500Kbps (2D/2DD)
+
+  Serial.print(F("@@    Estimated media density = "));
+  switch(*data_rate) {
+    case 0:  Serial.println(F("2D/2DD"));      break;
+    case 1:  Serial.println(F("2HD"));         break;
+    default: Serial.println(F("**UNKNOWN**")); break;
+  }
 }
 
+// Checks whether the drive type is 2D or 2DD/2HD.
+//   Move head to track 44 and step-out until TRK00 
+//   gets asserted. The step-out count implies the 
+//   drive type.
+byte check_fdd_type(void) {
+  g_num_step_pulse = 1;
 
+  Serial.println(F("@@Detecting FDD type."));
+
+  fdd_restore();
+
+  int trk=0;
+  for(trk=0; trk<44; trk++) {
+    fdd_step_in();
+  }
+
+  trk = 0;
+  while(fdd_is_trk00()==false) {
+    fdd_step_out();
+    if(trk++ > 50) break;
+  }
+  //Serial.print("@@");
+  //Serial.println(trk);
+  byte fdd_type;
+  Serial.print(F("@@    FDD type = "));
+  if (trk>42) {
+    fdd_type = 1;
+    Serial.println(F("2DD/2HD (80 tracks)"));
+    if(g_media_max_track == 40) {
+      g_num_step_pulse = 2;       // 2D media in a 2DD/2HD drive
+    } else {
+      g_num_step_pulse = 1;       // 2DD/2HD media in a 2DD/2HD drive
+    }
+  } else {
+    fdd_type = 0;
+    Serial.println(F("2D (40 tracks)"));
+    g_num_step_pulse = 1;         // 2D media in a 2D drive
+  }
+
+  return fdd_type;
+}
+
+byte g_offset = 0;
+byte g_data_rate = 0;
 
 void setup() {
   init_io();
 
   fdd_restore();
   fdd_side(0);
-}
 
+  while(Serial.find("+++")==false) ;    // wait for '+++'
+  String param;
+  param = Serial.readString();
+  param.trim();
+  if(param=="2DD" || param=="2HD") {
+    g_media_max_track = 80;
+  } else {
+    g_media_max_track = 40;
+  }
 
-void loop() {
+  Serial.println(F("@@** FD-CAPTURE-LITE"));
 
-  Serial.println("** FD-CAPTURE-LITE");
-  show_arduino_settings();
-  Serial.println("++START");
-  Serial.flush();
-  delay(500);
+  byte fdd_type = check_fdd_type();
 
 #if 0
   byte buf[128];
@@ -557,31 +549,42 @@ void loop() {
   while(true) ;
 #endif
 
-  Serial.print("@@Number of step pulse(s) per track = ");
-  Serial.println(NUM_STEP_PULSE);
+  Serial.print(F("@@Number of step pulse(s) per track = "));
+  Serial.println(g_num_step_pulse);
 
-  byte offset = check_data_cell_size_and_estimate_offset();
+  check_data_cell_size_and_estimate_offset(&g_offset, &g_data_rate);
+}
 
+void loop() {
   int max_track = 0;
+
 #if TEST_MODE==1
   max_track = 4;
 #else
-  max_track = NUM_MEDIA_TRACK;
+  max_track = g_media_max_track;
 #endif
+
+  Serial.println("++START");
+  Serial.flush();
+
+  delay(500);
 
   for(byte trk=0; trk<max_track; trk++) {
     fdd_side(0);
-    read_track(offset);
+    read_track(g_offset, g_data_rate);
     Serial.println();
 
     fdd_side(1);
-    read_track(offset);
+    read_track(g_offset, g_data_rate);
     Serial.println();
 
     fdd_step_in();
   }
+
   delay(500);
+
   Serial.println("++END");
   Serial.flush();
-  while(true);
+
+  while(true) ;
 }

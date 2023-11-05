@@ -1,9 +1,7 @@
-# Options: "2D" / "2DD" / "2HD"
-MEDIA_TYPE = "2HD"
-
-
 import sys
 import re
+import time
+import argparse
 
 try:
     import serial
@@ -38,10 +36,7 @@ class bitarray:
 
 
 def decode_to_track_image(track_encoded):
-    if MEDIA_TYPE == "2D" or MEDIA_TYPE == "2DD":
-        samples_per_cell = 8            # 2DD
-    else:
-        samples_per_cell = 8            # 2HD
+    samples_per_cell = 8
     out_buf = bitarray()
     for enc in track_encoded:
         decoded = ord(enc) - 0x20
@@ -78,7 +73,7 @@ def dump_byte_buffer(buff, pos=-1):
             print(f'*{dt:02x} ', end='')
     print()
 
-def write_mfm_image(track_images, file_name:str):
+def write_mfm_image(track_images, file_name:str, media_type:str):
     mfm_header_pos           = 0
     mfm_track_table_pos      = 0x100
     mfm_track_data_start_pos = 0x1000
@@ -88,17 +83,17 @@ def write_mfm_image(track_images, file_name:str):
     set_uint64(mfm_header, 8,  mfm_track_table_pos) # Track table offset
     set_uint64(mfm_header, 16, len(track_images))   # number of track images
     set_uint64(mfm_header, 24, 0.2/1e-9)            # spindle rotation time (ns)
-    if MEDIA_TYPE == "2D" or MEDIA_TYPE == "2DD":
+    if media_type == "2D" or media_type == "2DD":
         set_uint64(mfm_header, 32, 500e3)           # data bit rate (2d/2dd=500k)
-        set_uint64(mfm_header, 40, 4e6)                 # sample rate (4MHz)
+        set_uint64(mfm_header, 40, 4e6)             # sample rate (4MHz)
     else:
         set_uint64(mfm_header, 32, 1e6)             # data bit rate (2hd=1M)
         set_uint64(mfm_header, 40, 8e6)             # sample rate (8MHz)
 
-    if MEDIA_TYPE == "2D":
-        track_table = bytearray(16*(80+4))
+    if media_type == "2D":
+        track_table = bytearray(16*(80+4))          # 2D
     else:
-        track_table = bytearray(16*(160+4))
+        track_table = bytearray(16*(160+4))         # 2DD/2HD
 
     track_data_pos = mfm_track_data_start_pos       # start position of actual track image data
     track_data_pos_list = []
@@ -130,30 +125,42 @@ def detect_arduino():
     return aport
 
 
-def main():
+def main(args):
     print("** FD-CAPTURE-LITE")
 
-    # Search an Arduino and open UART
-    print('[HOST] Searching for Arduino')
-    arduino_port = detect_arduino()
-    if arduino_port is None:
-        print('[ERROR] Arduino is not found')
-        sys.exit(1)
+    if args.port == '':
+        # Search an Arduino and open UART
+        print('[HOST] Searching for Arduino')
+        arduino_port = detect_arduino()
+        if arduino_port is None:
+            print('[ERROR] Arduino is not found')
+            sys.exit(1)
+        else:
+            print('[HOST] Arduino is found on "{}"'.format(arduino_port))
     else:
-        print('[HOST] Arduino is found on "{}"'.format(arduino_port))
+        arduino_port = args.port
+
     try:
-        uart = serial.Serial(arduino_port, baudrate=2e6, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE)
+        uart = serial.Serial(arduino_port,
+                            baudrate=2000000,
+                            bytesize=serial.EIGHTBITS,
+                            parity=serial.PARITY_NONE,
+                            stopbits=serial.STOPBITS_ONE,
+                            timeout=5)
     except serial.serialutil.SerialException:
         print(f'[ERROR] {arduino_port} is in use.')
         sys.exit(1)
 
-    uart.reset_input_buffer()
-    uart.reset_output_buffer()
+    media_type = args.media
 
     track_buffers = []
     track_count = 0
 
-    print(f"[HOST] Floppy media type setting = {MEDIA_TYPE}")
+    time.sleep(2)           # Wait until UART port gets ready
+    uart.read_all()
+    print(f"[HOST] Floppy media type setting = {media_type}")
+
+    uart.write((f'\n+++{media_type}\n').encode())
 
     reading = False
     while True:
@@ -180,6 +187,9 @@ def main():
             track_buffers.append(line[2:])
             print(f'{track_count:d} ', end='', flush=True)
             track_count+=1
+        else:
+            if(line!=''):
+                print(line)
     uart.close();
 
     print()    
@@ -192,8 +202,12 @@ def main():
     print()
 
     image_file_name = 'image.mfm'
-    write_mfm_image(track_images, image_file_name)
+    write_mfm_image(track_images, image_file_name, media_type)
     print(f'[HOST] Completed -> "{image_file_name}".')
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description = 'FD-CAPTURE-LITE : Floppy disk image capturing tool')
+    parser.add_argument('-p', '--port',  type=str, default='', help='Descriptor for a communication COM port for Arduino (e.g. COM1:)')
+    parser.add_argument('-m', '--media', type=str, default='2D', help='Floppy media type. Options: 2D, 2DD, 2HD')
+    args = parser.parse_args()
+    main(args)

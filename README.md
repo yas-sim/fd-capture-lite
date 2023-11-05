@@ -6,7 +6,7 @@ This project is a simplified version of [floppy_disk_shield_2d](https://github.c
 The FD-capture-lite has the following features:
 - 2D/2DD floppy image capturing feature
 - Create a floppy disk image in ['MFM' image](https://github.com/yas-sim/fdc_bitstream#mfm-image-data-format) file
-- Only you need is an [Arduino Uno R3](https://docs.arduino.cc/hardware/uno-rev3) and a floppy disk drive. You don't need to have a special Arduino shield or any other hardware.
+- What you only need is an [Arduino Uno R3](https://docs.arduino.cc/hardware/uno-rev3) and a floppy disk drive. You don't need to have a special Arduino shield or any other hardware.
 - The host program is written in Python. The host program communicates with Arduino via the onboard USB-serial interface on Arduino.
 
 ## Caveat
@@ -36,6 +36,17 @@ pip install -r requisites.txt
 |DIR|D9|18||
 |DS0<br>DS1<br>DS2<br>DS3|GND|10<br>12<br>14<br>6|Depends on the setting of your FDD drive. You can connect all of them to GND if you have no idea which one to connect.<br>The generic FDDs for IBM PCs use DS2 for drive select, and old 8-bit PCs may use DS0 or DS1 depending on which side the drive was installed.|
 |GND|GND|1,5,7,9,11,...|One of a odd pins except pin3|
+
+------------------------
+## How it works
+This system uses the input-capture function on 16-bit timer 1 on the Arduino (ATMega328 CPU) to measure the data-pulse to data-pulse time. The timer 1 counts up at 16MHz (ClkIO 1:1).
+
+1. Pulse timing measurement (preparation): Collect some pulse-to-pulse timing data, create a histogram and calculate the pulse timing related information based on the histogram such as timing offset (due to software process is involved in timing measurement) and the data rate of the floppy disk.
+2. Start capturing: Wait for index hole and start capturing.
+3. Measure pulse-to-pulse time by input-capture on timer 1
+4. Encode the pulse-to-pulse time data into C/D (clock/data) pulse data on-the-fly. The precise pulse timing information is lost at this stage, but the essential C/D pulse information is preserved.
+5. The C/D bit stream is packed into 6-bit data and be submitted to the host via the USART on the ATMega328 CPU. The submit data is encoded to printable code (just add 0x20 (' ')) and be submitted. USART baud rate is 2Mbps and it has enough transfer capacity for this purpose. **The C/D stream data is LSB first**.
+6. Capture end: Capture will be stopped when the next index hole is detected.
 
 ------------------------
 ## Other information
