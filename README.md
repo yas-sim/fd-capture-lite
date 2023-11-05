@@ -38,6 +38,14 @@ pip install -r requisites.txt
 |GND|GND|1,5,7,9,11,...|One of a odd pins except pin3|
 
 ------------------------
+
+## `fd-capture-lite.py` options
+|Option| |Description|
+|---|---|---|
+|`-m`|`--media`|Floppy media type. "`2D`"/"`2DD`"/"`2HD`"|
+|`-p`|`--port`|Arduino COM port. Example '`-p COM7`'|
+
+------------------------
 ## How it works
 This system uses the input-capture function on 16-bit timer 1 on the Arduino (ATMega328 CPU) to measure the data-pulse to data-pulse time. The timer 1 counts up at 16MHz (ClkIO 1:1).
 
@@ -50,9 +58,6 @@ This system uses the input-capture function on 16-bit timer 1 on the Arduino (AT
 
 ------------------------
 ## Other information
-- The primary goal of this project is to provide **minimum** features and capabilities to capture the FD data and create a FD image file.
-    - The host program doesn't take any command options. You may need to modify the source code to change the settings.
-    - The Arduino firmware is not configurable at the runtime. You need to modify the source code, build-and-reprogram to change its behavior and settings.
 - This project uses 'MFM' floppy image format that is defined and developed by me. Please refer to the following projects for the details.
     - [Floppy disk shield 2D](https://github.com/yas-sim/floppy_disk_shield_2d)
     - [FDC bitstream](https://github.com/yas-sim/fdc_bitstream)
@@ -63,19 +68,20 @@ This system uses the input-capture function on 16-bit timer 1 on the Arduino (AT
 
 ## Log example 1
 ~~~sh
-python fd-capture-lite.py
+>python fd-capture-lite.py -p COM7 -m 2D
 ** FD-CAPTURE-LITE
-[HOST] Searching for Arduino
-[HOST] Arduino is found on "COM8"
 [HOST] Floppy media type setting = 2D
-[ARDUINO] Floppy media type setting = 2D
-[ARDUINO] FDD type setting = 2HD
+[ARDUINO] ** FD-CAPTURE-LITE
+[ARDUINO] Detecting FDD type.
+[ARDUINO]     FDD type = 2DD/2HD (80 tracks)
 [ARDUINO] Number of step pulse(s) per track = 2
-[ARDUINO] Checking pulse condition of the floppy disk.
-[ARDUINO] Peaks = 54 88 120
-[ARDUINO] Estimated cell size = 33
-[ARDUINO] Estimated input capture offset = 12
-[ARDUINO] Recommended total offset = 28
+[ARDUINO] Checking data pulse condition of the floppy disk.
+[ARDUINO]     Failed. Starting over....
+[ARDUINO]     Peaks of pulse-to-pulse time = 62 92 126
+[ARDUINO]     Estimated cell size = 32
+[ARDUINO]     Estimated input capture offset = 2
+[ARDUINO]     Recommended total offset = 18
+[ARDUINO]     Estimated media density = 2D/2DD
 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
 [HOST] Image read completed.
 [HOST] Converting read data into MFM disk image data
@@ -84,27 +90,8 @@ python fd-capture-lite.py
 ~~~
 
 ## Log example 2
-Reading a disk image with fd-capture-lite, and convert the generated MFM file into D77 disk image format using the image_converter in the fdc_bitstream project.
+Converting a generated MFM file into D77 disk image format using the image_converter in the fdc_bitstream project.
 ~~~sh
-N:\work\fd_capture_lite>python fd-capture-lite.py
-** FD-CAPTURE-LITE
-[HOST] Searching for Arduino
-[HOST] Arduino is found on "COM8"
-[HOST] Floppy media type setting = 2D
-[ARDUINO] Floppy media type setting = 2D
-[ARDUINO] FDD type setting = 2HD
-[ARDUINO] Number of step pulse(s) per track = 2
-[ARDUINO] Checking data pulse condition of the floppy disk.
-[ARDUINO]     Peaks = 54 88 120
-[ARDUINO]     Estimated cell size = 33
-[ARDUINO]     Estimated input capture offset = 12
-[ARDUINO]     Recommended total offset = 28
-0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
-[HOST] Image read completed.
-[HOST] Converting read data into MFM disk image data
-0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
-[HOST] Completed -> "image.mfm".
-
 N:\work\fd_capture_lite>c:\Users\yas_s\source\repos\fdc_test\bin\Release\image_converter.exe -i image.mfm -o image.d77 -v
 Reading image.mfm.
 VFO type : 5
