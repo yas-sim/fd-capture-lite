@@ -1,3 +1,4 @@
+import os
 import sys
 import re
 import time
@@ -138,7 +139,7 @@ def main(args):
         else:
             print('[HOST] Arduino is found on "{}"'.format(arduino_port))
     else:
-        arduino_port = args.port
+        arduino_port = args.port.upper()
 
     try:
         uart = serial.Serial(arduino_port,
@@ -151,7 +152,7 @@ def main(args):
         print(f'[ERROR] {arduino_port} is in use.')
         sys.exit(1)
 
-    media_type = args.media
+    media_type = args.media.upper()
 
     track_buffers = []
     track_count = 0
@@ -161,6 +162,10 @@ def main(args):
     print(f"[HOST] Floppy media type setting = {media_type}")
 
     uart.write((f'\n+++{media_type}\n').encode())
+
+    image_path, image_ext = os.path.splitext(args.image)
+    image_ext = '.mfm' if image_ext.lower != '.mfm' else image_ext
+    image_file_name = image_path + image_ext
 
     reading = False
     while True:
@@ -201,7 +206,6 @@ def main(args):
         track_images.append(decode_to_track_image(trk))
     print()
 
-    image_file_name = 'image.mfm'
     write_mfm_image(track_images, image_file_name, media_type)
     print(f'[HOST] Completed -> "{image_file_name}".')
 
@@ -209,5 +213,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = 'FD-CAPTURE-LITE : Floppy disk image capturing tool')
     parser.add_argument('-p', '--port',  type=str, default='', help='Descriptor for a communication COM port for Arduino (e.g. COM1:)')
     parser.add_argument('-m', '--media', type=str, default='2D', help='Floppy media type. Options: 2D, 2DD, 2HD')
+    parser.add_argument('-i', '--image', type=str, default='image.mfm', help='Floppy image file name')
     args = parser.parse_args()
     main(args)

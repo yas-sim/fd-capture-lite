@@ -14,15 +14,14 @@ The FD-capture-lite has the following features:
     - This project uses AVR inline assembly code. The program has deep dependency on ATMega328 CPU.
 - The Arduino Uno R3 clone boards may work (as long as the CPU is ATMega328) but the board should support 2Mbps serial I/F speed.
 
-## Hardware preparation - Arduino-FDD wiring
-You just need to use some jump-wires to connect FDD to Arduino directry.
-
 ## Prerequisites
-The host program requires 'pyserial' module.
+The host program requires '`pyserial`' module.
 ~~~sh
 pip install -r requisites.txt
 ~~~
 
+## Hardware preparation - Arduino-FDD wiring
+You just need to use some jump-wires to connect FDD to Arduino directry.
 ----
 |Signal|[Arduino shield pins](https://docs.arduino.cc/static/6ec5e4c2a6c0e9e46389d4f6dc924073/2f891/Pinout-UNOrev3_latest.png)|FDD 34pin conn|Note|
 |:-:|:-:|:-:|---|
@@ -49,8 +48,8 @@ pip install -r requisites.txt
 ## How it works
 This system uses the input-capture function on 16-bit timer 1 on the Arduino (ATMega328 CPU) to measure the data-pulse to data-pulse time. The timer 1 counts up at 16MHz (ClkIO 1:1).
 
-1. Pulse timing measurement (preparation): Collect some pulse-to-pulse timing data, create a histogram and calculate the pulse timing related information based on the histogram such as timing offset (due to software process is involved in timing measurement) and the data rate of the floppy disk.
-2. Start capturing: Wait for index hole and start capturing.
+1. **Pulse timing measurement (preparation)**: Collect some pulse-to-pulse timing data, create a histogram and calculate the pulse timing related information based on the histogram such as timing offset (due to software process is involved in timing measurement) and the data rate of the floppy disk.
+2. **Start capturing**: Wait for index hole and start capturing.
 3. Measure pulse-to-pulse time by input-capture on timer 1
 4. Encode the pulse-to-pulse time data into C/D (clock/data) pulse data on-the-fly. The precise pulse timing information is lost at this stage, but the essential C/D pulse information is preserved.
 5. The C/D bit stream is packed into 6-bit data and be submitted to the host via the USART on the ATMega328 CPU. The submit data is encoded to printable code (just add 0x20 (' ')) and be submitted. USART baud rate is 2Mbps and it has enough transfer capacity for this purpose. **The C/D stream data is LSB first**.

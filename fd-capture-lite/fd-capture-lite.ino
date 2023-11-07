@@ -1,5 +1,5 @@
 // Options: 0=Normal, 1=Test (read only 4 tracks)
-#define TEST_MODE     (0)
+#define TEST_MODE     (1)
 
 
 
@@ -118,7 +118,9 @@ void read_track(byte cell_ofst=0, byte data_rate=0) {
   byte bit_buf = 0;
   byte bit_cnt = 0;
   byte quantized = 0;
-  bool index_passed = false;
+
+  byte prev_idx = 0;
+  byte index_passed = 0;
 
   // Memo:
   // 2D/2DD Plus period = 4us/6us/8us, 2HD=2us/3us/4us
@@ -144,115 +146,225 @@ void read_track(byte cell_ofst=0, byte data_rate=0) {
   //
   // ; TCNT1 count might be smaller than expected ideal counts in 8 to 10 counts. (Due to TCNT1 clear delay in SW)
   if(cell_ofst==0) {
-#if DATA_RATE == FLP_DR_1M
-    cell_ofst = 8+16/2;     // 2HD
-#else
-    cell_ofst = 8+32/2;     // 2D
-#endif
+    if(data_rate==0)  cell_ofst = 2+32/2;     // 2D/2DD
+    else              cell_ofst = 2+16/2;     // 2HD
   }
 
   Serial.print("==");
   Serial.flush();
   delay(50);
 
-  // INDEX=IO6 == PD6
-  asm volatile(
-    "clr %[v_bit_buf]"                "\n\t"
-    "ldi %[v_bit_cnt],0xff"           "\n\t"
-    "clr %[v_index_passed]"           "\n\t"
+  if(data_rate==0) {
+    // Data rate == 0 (2D/2DD)
+    // INDEX=IO6 == PD6
+    asm volatile(
+      "clr %[v_bit_buf]"                "\n\t"
+      "ldi %[v_bit_cnt],0xff"           "\n\t"
+      "clr %[v_index_passed]"           "\n\t"
 
-    "cli"                             "\n\t"  // Disable all interrupts
+      "ldi r20,lo8(bitptn_%=)"          "\n\t"
+      "ldi r21,hi8(bitptn_%=)"          "\n\t"
 
-    // Wait for the index hole
-    "L_IDX0_%=:"                      "\n\t"
-    "sbis %[io_PIND],%[bit_index]"    "\n\t"
-    "rjmp L_IDX0_%="                  "\n\t"
-    "L_IDX1_%=:"                      "\n\t"
-    "sbic %[io_PIND],%[bit_index]"    "\n\t"
-    "rjmp L_IDX1_%="                  "\n\t"  // Index hole detected
+      "cli"                             "\n\t"  // Disable all interrupts
 
-    // Clear TCNT1
-    "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
-    "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
-    "clr r18"                         "\n\t"  // prev_ICR1L = 0
+      // Wait for the index hole
+      "L_IDX0_%=:"                      "\n\t"
+      "sbis %[io_PIND],%[bit_index]"    "\n\t"
+      "rjmp L_IDX0_%="                  "\n\t"
+      "L_IDX1_%=:"                      "\n\t"
+      "sbic %[io_PIND],%[bit_index]"    "\n\t"
+      "rjmp L_IDX1_%="                  "\n\t"  // Index hole detected
 
-    "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+      // Clear TCNT1
+      "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
+      "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
+      "clr r18"                         "\n\t"  // prev_ICR1L = 0
 
-    "L_MAIN_LOOP_%=:"                 "\n\t"
+      "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
-    // Wait for input capture flag 1 on timer 1
-    "L_WAIT_FOR_ICF1_%=:"             "\n\t"
-    "sbis %[io_TIFR1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
-    "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
+      "L_MAIN_LOOP_%=:"                 "\n\t"
 
-    "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"
-    "sub %[v_ic_val],r18"             "\n\t"  // ic_val = curr_ICR1L - prev_ICR1L
-    "lds r18,%[io_ICR1L]"             "\n\t"  // prev_ICR1L = ICR1L
-    "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+      // Wait for input capture flag 1 on timer 1
+      "L_WAIT_FOR_ICF1_%=:"             "\n\t"
+      "sbis %[io_TIFR1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
+      "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
 
-    // Quantize captured value (val+v_cell_ofst)/cell_size
-    "add %[v_ic_val],%[v_cell_ofst]"  "\n\t"
-    "sbrs %[v_data_rate],0"           "\n\t"  // if data_rate.0 == 1, skip
-    "lsr %[v_ic_val]"                 "\n\t"
-    "swap %[v_ic_val]"                "\n\t"  // swap ~= right shift for 4bits
-    "andi %[v_ic_val],0x0f"           "\n\t"
-    "add %[v_bit_cnt],%[v_ic_val]"    "\n\t"  // bit_cnt += quantized_val
+      "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"
+      "sub %[v_ic_val],r18"             "\n\t"  // ic_val = curr_ICR1L - prev_ICR1L
+      "lds r18,%[io_ICR1L]"             "\n\t"  // prev_ICR1L = ICR1L
+      "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
-    "L_USART_loop_%=:"                "\n\t"
-    "cpi %[v_bit_cnt],6"              "\n\t"
-    "brcs L_skip_usart%="             "\n\t"  // if bitcnt >= 6, then output the bit buffer to USART
+      // Quantize captured value (val+v_cell_ofst)/cell_size
+      "add %[v_ic_val],%[v_cell_ofst]"  "\n\t"
+      "lsr %[v_ic_val]"                 "\n\t"
+      "swap %[v_ic_val]"                "\n\t"  // swap ~= right shift for 4bits
+      "andi %[v_ic_val],0x0f"           "\n\t"
+      "add %[v_bit_cnt],%[v_ic_val]"    "\n\t"  // bit_cnt += quantized_val
 
-    // Encode to a printable charactor
-    "ldi r17,0x20"                    "\n\t"
-    "add r17,%[v_bit_buf]"            "\n\t"
+      "L_USART_loop_%=:"                "\n\t"
+      "cpi %[v_bit_cnt],6"              "\n\t"
+      "brcs L_skip_usart%="             "\n\t"  // if bitcnt >= 6, then output the bit buffer to USART
 
-    // Wait for UDRE0 (USART0 data register empty)
-    "L_WAIT_UDRE0_%=:"                "\n\t"
-    "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
-    "sbrs r16,%[bit_UDRE0]"           "\n\t"
-    "rjmp L_WAIT_UDRE0_%="            "\n\t"
+      // Encode to a printable charactor
+      "ldi r17,0x20"                    "\n\t"
+      "add r17,%[v_bit_buf]"            "\n\t"
 
-    "sts %[io_UDR0],r17"              "\n\t"  // y==UDR0, output encoded data to USART
-    "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
-    "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0
-    "rjmp L_USART_loop_%="            "\n\t"
+      // Wait for UDRE0 (USART0 data register empty)
+      "L_WAIT_UDRE0_%=:"                "\n\t"
+      "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
+      "sbrs r16,%[bit_UDRE0]"           "\n\t"
+      "rjmp L_WAIT_UDRE0_%="            "\n\t"
 
-    "L_skip_usart%=:"                 "\n\t"  // Make 1<<bit_cnt value
-    "mov r16,%[v_bit_cnt]"            "\n\t"
-    "clr r17"                         "\n\t"
-    "sec"                             "\n\t"  // Carry = 1
-    "L_SHIFT0_%=:"                    "\n\t"
-    "rol r17"                         "\n\t"
-    "subi r16,1"                      "\n\t"
-    "brcc L_SHIFT0_%="                "\n\t"
-    "or %[v_bit_buf],r17"             "\n\t"  // bit_buf |= 1<<bit_cnt
+      "sts %[io_UDR0],r17"              "\n\t"  // y==UDR0, output encoded data to USART
+      "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
+      "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0
+      "rjmp L_USART_loop_%="            "\n\t"
 
-    "sbic %[io_PIND],%[bit_index]"    "\n\t"
-    "ori %[v_index_passed],0x01"      "\n\t"
-    "andi %[v_index_passed],0x01"     "\n\t"
-    "breq L_MAIN_LOOP_%="             "\n\t"
-    "sbic %[io_PIND],%[bit_index]"    "\n\t"
-    "rjmp L_MAIN_LOOP_%="             "\n\t"
-    "sei"                             "\n\t"  // Enable all interrupts
-    : [v_bit_buf]   "+r" (bit_buf),
-      [v_bit_cnt]   "+r" (bit_cnt),
-      [v_ic_val]    "+r" (ic_val),
-      [v_index_passed] "+r" (index_passed)
-    : [io_PIND]   "I" (_SFR_IO_ADDR(PIND)), 
-      [io_TIFR1]  "I" (_SFR_IO_ADDR(TIFR1)),
-      [io_TCNT1H] "M" (_SFR_MEM_ADDR(TCNT1H)), 
-      [io_TCNT1L] "M" (_SFR_MEM_ADDR(TCNT1L)),
-      [io_ICR1H]  "M" (_SFR_MEM_ADDR(ICR1H)),
-      [io_ICR1L]  "M" (_SFR_MEM_ADDR(ICR1L)),
-      [io_UCSR0A] "M" (_SFR_MEM_ADDR(UCSR0A)),
-      [io_UDR0]   "M" (_SFR_MEM_ADDR(UDR0)),
-      [bit_index] "I" (6),
-      [bit_ICF1]  "I" (ICF1),
-      [bit_UDRE0] "I" (UDRE0),
-      [v_cell_ofst] "r" (cell_ofst),
-      [v_data_rate] "r" (data_rate)
-    : "r16", "r17", "r18"
-    );
+      "L_skip_usart%=:"                 "\n\t"  // Make 1<<bit_cnt value
+      "movw r30,r20"                    "\n\t"  // x(r31,r30) <= r21,r20 (bit pattern table)
+      "add r30,%[v_bit_cnt]"            "\n\t"
+      "adc r31,__zero_reg__"            "\n\t"
+      "lpm r17,z"                       "\n\t"  // get bit pattern from a table
+      "or %[v_bit_buf],r17"             "\n\t"  // bit_buf |= 1<<bit_cnt
+
+      "sbic %[io_PIND],%[bit_index]"    "\n\t"  // #1/2
+      "ori %[v_index_passed],0x01"      "\n\t"  // #1
+      "andi %[v_index_passed],0x01"     "\n\t"  // #1
+      "breq L_MAIN_LOOP_%="             "\n\t"  // #1/2
+      "sbic %[io_PIND],%[bit_index]"    "\n\t"  // #1/2
+      "rjmp L_MAIN_LOOP_%="             "\n\t"  // #2
+      "rjmp L_EXIT_%="                  "\n\t"
+      "bitptn_%=:"                      "\n\t"
+      ".byte 0x01,0x02,0x04,0x08,0x10,0x20,0x20,0x20"  "\n\t"
+      ".byte 0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20"  "\n\t"
+      "L_EXIT_%=:"                      "\n\t"
+      "sei"                             "\n\t"  // Enable all interrupts
+      : [v_bit_buf]   "+r" (bit_buf),
+        [v_bit_cnt]   "+r" (bit_cnt),
+        [v_ic_val]    "+r" (ic_val),
+        [v_index_passed]  "+r" (index_passed)
+      : [io_PIND]   "I" (_SFR_IO_ADDR(PIND)), 
+        [io_TIFR1]  "I" (_SFR_IO_ADDR(TIFR1)),
+        [io_TCNT1H] "M" (_SFR_MEM_ADDR(TCNT1H)), 
+        [io_TCNT1L] "M" (_SFR_MEM_ADDR(TCNT1L)),
+        [io_ICR1H]  "M" (_SFR_MEM_ADDR(ICR1H)),
+        [io_ICR1L]  "M" (_SFR_MEM_ADDR(ICR1L)),
+        [io_UCSR0A] "M" (_SFR_MEM_ADDR(UCSR0A)),
+        [io_UDR0]   "M" (_SFR_MEM_ADDR(UDR0)),
+        [bit_index] "I" (6),
+        [bit_ICF1]  "I" (ICF1),
+        [bit_UDRE0] "I" (UDRE0),
+        [v_cell_ofst] "r" (cell_ofst)
+      : "r16", "r17", "r18",
+        "r20", "r21",
+        "r30", "r31"
+      );
+  } else {
+    // Data rate == 1 (2HD)
+    // INDEX=IO6 == PD6
+    asm volatile(
+      "clr %[v_bit_buf]"                "\n\t"
+      "ldi %[v_bit_cnt],0xff"           "\n\t"
+      "clr %[v_index_passed]"           "\n\t"
+
+      "ldi r20,lo8(bitptn_%=)"          "\n\t"
+      "ldi r21,hi8(bitptn_%=)"          "\n\t"
+
+      "cli"                             "\n\t"  // Disable all interrupts
+
+      // Wait for the index hole
+      "L_IDX0_%=:"                      "\n\t"
+      "sbis %[io_PIND],%[bit_index]"    "\n\t"
+      "rjmp L_IDX0_%="                  "\n\t"
+      "L_IDX1_%=:"                      "\n\t"
+      "sbic %[io_PIND],%[bit_index]"    "\n\t"
+      "rjmp L_IDX1_%="                  "\n\t"  // Index hole detected
+
+      // Clear TCNT1
+      "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
+      "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
+      "clr r18"                         "\n\t"  // prev_ICR1L = 0
+
+      "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+
+      "L_MAIN_LOOP_%=:"                 "\n\t"
+
+      // Wait for input capture flag 1 on timer 1
+      "L_WAIT_FOR_ICF1_%=:"             "\n\t"
+      "sbis %[io_TIFR1],%[bit_ICF1]"    "\n\t"  // TIFR1.ICF1
+      "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
+
+      "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"
+      "sub %[v_ic_val],r18"             "\n\t"  // ic_val = curr_ICR1L - prev_ICR1L
+      "lds r18,%[io_ICR1L]"             "\n\t"  // prev_ICR1L = ICR1L
+      "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
+
+      // Quantize captured value (val+v_cell_ofst)/cell_size
+      "add %[v_ic_val],%[v_cell_ofst]"  "\n\t"
+      "swap %[v_ic_val]"                "\n\t"  // swap ~= right shift for 4bits
+      "andi %[v_ic_val],0x07"           "\n\t"
+      "add %[v_bit_cnt],%[v_ic_val]"    "\n\t"  // bit_cnt += quantized_val
+
+      "L_USART_loop_%=:"                "\n\t"
+      "cpi %[v_bit_cnt],6"              "\n\t"
+      "brcs L_skip_usart%="             "\n\t"  // if bitcnt >= 6, then output the bit buffer to USART
+
+      // Encode to a printable charactor
+      "ldi r17,0x20"                    "\n\t"
+      "add r17,%[v_bit_buf]"            "\n\t"
+
+      // Wait for UDRE0 (USART0 data register empty)
+      "L_WAIT_UDRE0_%=:"                "\n\t"
+      "lds r16,%[io_UCSR0A]"            "\n\t"  // x==UCSR0A
+      "sbrs r16,%[bit_UDRE0]"           "\n\t"
+      "rjmp L_WAIT_UDRE0_%="            "\n\t"
+
+      "sts %[io_UDR0],r17"              "\n\t"  // y==UDR0, output encoded data to USART
+      "subi %[v_bit_cnt],6"             "\n\t"  // bit_cnt -= 6
+      "clr %[v_bit_buf]"                "\n\t"  // bit_buf = 0
+      "rjmp L_USART_loop_%="            "\n\t"
+
+      "L_skip_usart%=:"                 "\n\t"  // Make 1<<bit_cnt value
+      "movw r30,r20"                    "\n\t"  // x(r31,r30) <= r21,r20 (bit pattern table)
+      "add r30,%[v_bit_cnt]"            "\n\t"
+      "adc r31,__zero_reg__"            "\n\t"
+      "lpm r17,z"                       "\n\t"  // get bit pattern from a table
+      "or %[v_bit_buf],r17"             "\n\t"  // bit_buf |= 1<<bit_cnt
+
+      "sbic %[io_PIND],%[bit_index]"    "\n\t"  // #1/2
+      "ori %[v_index_passed],0x01"      "\n\t"  // #1
+      "andi %[v_index_passed],0x01"     "\n\t"  // #1
+      "breq L_MAIN_LOOP_%="             "\n\t"  // #1/2
+      "sbic %[io_PIND],%[bit_index]"    "\n\t"  // #1/2
+      "rjmp L_MAIN_LOOP_%="             "\n\t"  // #2
+      "rjmp L_EXIT_%="                  "\n\t"
+      "bitptn_%=:"                      "\n\t"
+      ".byte 0x01,0x02,0x04,0x08,0x10,0x20,0x20,0x20"  "\n\t"
+      ".byte 0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20"  "\n\t"
+      ".byte 0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20"  "\n\t"
+      "L_EXIT_%=:"                      "\n\t"
+      "sei"                             "\n\t"  // Enable all interrupts
+      : [v_bit_buf]   "+r" (bit_buf),
+        [v_bit_cnt]   "+r" (bit_cnt),
+        [v_ic_val]    "+r" (ic_val),
+        [v_index_passed]  "+r" (index_passed)
+      : [io_PIND]   "I" (_SFR_IO_ADDR(PIND)), 
+        [io_TIFR1]  "I" (_SFR_IO_ADDR(TIFR1)),
+        [io_TCNT1H] "M" (_SFR_MEM_ADDR(TCNT1H)), 
+        [io_TCNT1L] "M" (_SFR_MEM_ADDR(TCNT1L)),
+        [io_ICR1H]  "M" (_SFR_MEM_ADDR(ICR1H)),
+        [io_ICR1L]  "M" (_SFR_MEM_ADDR(ICR1L)),
+        [io_UCSR0A] "M" (_SFR_MEM_ADDR(UCSR0A)),
+        [io_UDR0]   "M" (_SFR_MEM_ADDR(UDR0)),
+        [bit_index] "I" (6),
+        [bit_ICF1]  "I" (ICF1),
+        [bit_UDRE0] "I" (UDRE0),
+        [v_cell_ofst] "r" (cell_ofst)
+      : "r16", "r17", "r18",
+        "r20", "r21",
+        "r30", "r31"
+      );
+  }
 }
 
 
@@ -260,24 +372,25 @@ void rt_test(void)
 {
   byte ic_val = 0;
   byte quantized = 0;
+  byte prev_ICR1L = 0;
 
   byte buf[128];
-  word buf_cnt = 0;
 
   for(int i=0; i<128; i++) buf[i]=0;
 
   noInterrupts();
   fdd_wait_index();
   TCNT1 = 0;
+  prev_ICR1L = 0;
   TIFR1 = 1<<ICF1;                         // Clear ICF1
-  do {
+  while(true) {
     while((TIFR1 & (1<<ICF1))==0) ;        // Input Captuer interrupt request flag
-    TCNT1 = 0;
     ic_val = ICR1L;                        // Read captured time (ignore high byte)
+    ic_val -= prev_ICR1L;
+    prev_ICR1L = ICR1L;
     TIFR1 = 1<<ICF1;                       // Clear ICF1
-    buf[ic_val>>1]++;
-    buf_cnt++;
-  } while(buf_cnt<2000);
+    if(++buf[ic_val>>1]==255) break;
+  }
   interrupts();
 
   for(int i=0; i<128; i++) {
@@ -314,7 +427,7 @@ void get_histogram(byte buffer[]) {
     // Clear TCNT1
     "sts %[io_TCNT1H],__zero_reg__"   "\n\t"
     "sts %[io_TCNT1L],__zero_reg__"   "\n\t"
-    "clr r20"                         "\n\t"
+    "clr r18"                         "\n\t"
 
     "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
@@ -326,8 +439,8 @@ void get_histogram(byte buffer[]) {
     "rjmp L_WAIT_FOR_ICF1_%="         "\n\t"
 
     "lds %[v_ic_val],%[io_ICR1L]"     "\n\t"
-    "sub %[v_ic_val],r20"             "\n\t"  // ic_val = curr_ICR1L - prev_ICR1L
-    "lds r20,%[io_ICR1L]"             "\n\t"  // prev_ICR1L = ICR1L
+    "sub %[v_ic_val],r18"             "\n\t"  // ic_val = curr_ICR1L - prev_ICR1L
+    "lds r18,%[io_ICR1L]"             "\n\t"  // prev_ICR1L = ICR1L
     "sbi %[io_TIFR1],%[bit_ICF1]"     "\n\t"  // Clear ICF1
 
     "movw r26,r22"                    "\n\t"  // r27:r26 = xreg
@@ -351,7 +464,7 @@ void get_histogram(byte buffer[]) {
       [io_ICR1L]  "M" (_SFR_MEM_ADDR(ICR1L)),
       [bit_ICF1]  "I" (ICF1),
       [v_buffer] "e" ((uint16_t)buffer)
-    : "r16", "r20",
+    : "r16", "r18",
       "r22", "r23", 
       "r26", "r27"    // regX
     );
@@ -523,6 +636,11 @@ void setup() {
 
   fdd_restore();
   fdd_side(0);
+
+#if 0
+  rt_test();
+  while(true) ;
+#endif
 
   while(Serial.find("+++")==false) ;    // wait for '+++'
   String param;
